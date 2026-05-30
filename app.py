@@ -241,6 +241,28 @@ tr:hover td{background:#fafbff}
 .mn{font-size:11px;color:#bbb;margin-top:5px}
 
 .empty{text-align:center;padding:60px;color:#bbb;font-size:14px}
+
+#dp{position:fixed;right:-520px;top:0;width:500px;height:100vh;background:#fff;box-shadow:-4px 0 24px rgba(0,0,0,.13);transition:right .28s ease;z-index:200;display:flex;flex-direction:column}
+#dp.open{right:0}
+#dp-head{background:#1a1a2e;color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+#dp-head h2{font-size:14px;font-weight:700}
+#dp-close{background:none;border:none;color:#aaa;font-size:20px;cursor:pointer;line-height:1}
+#dp-close:hover{color:#fff}
+#dp-body{flex:1;overflow-y:auto;padding:16px 18px;display:flex;flex-direction:column;gap:12px}
+.dp-job{background:#f8f8ff;border-radius:8px;padding:10px 12px;font-size:13px}
+.dp-job strong{display:block;font-size:14px;margin-bottom:3px}
+.dp-job span{color:#888}
+.dp-qs label{font-size:12px;font-weight:700;color:#1a1a2e;margin-bottom:6px;display:block}
+.dp-q{display:flex;gap:6px;margin-bottom:6px;align-items:flex-start}
+.dp-q textarea{flex:1;padding:7px 9px;border:1px solid #ddd;border-radius:6px;font-size:12px;resize:vertical;min-height:38px;font-family:inherit}
+.dp-q button{padding:4px 8px;border:none;border-radius:4px;cursor:pointer;font-size:14px;background:#f5f5f5;color:#999}
+.dp-q button:hover{background:#fce8e6;color:#e94560}
+#dp-add{font-size:12px;color:#7c3aed;cursor:pointer;text-decoration:underline;background:none;border:none;padding:0}
+#dp-gen{padding:10px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;font-weight:700;width:100%}
+#dp-gen:hover{background:#6d28d9}
+#dp-gen:disabled{background:#bbb;cursor:not-allowed}
+#dp-out{background:#f8f8ff;border-radius:8px;padding:12px;font-size:13px;line-height:1.7;white-space:pre-wrap;border:1px solid #e8e8f0;display:none}
+#dp-copy{padding:7px 14px;background:#1a1a2e;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;display:none}
 </style>
 </head>
 <body>
@@ -338,6 +360,7 @@ tr:hover td{background:#fafbff}
     <th style="width:76px">마감</th>
     <th style="width:58px">경력</th>
     <th style="width:34px">⭐</th>
+    <th style="width:34px">📝</th>
   </tr></thead>
   <tbody id="tb-body">
   {% for j in results %}
@@ -373,6 +396,7 @@ tr:hover td{background:#fafbff}
     </td>
     <td>{% if j.get('career') %}<span class="cb">{{ j.career }}</span>{% endif %}</td>
     <td><button class="bm" onclick="bm(this,'{{ j.company }}|{{ j.title }}')">☆</button></td>
+    <td><button class="bm" onclick='openDraft({{ loop.index0 }})'>📝</button></td>
   </tr>
   {% endfor %}
   </tbody>
@@ -382,6 +406,24 @@ tr:hover td{background:#fafbff}
 {% else %}
 <div class="empty" style="margin-top:60px">키워드를 입력하고 검색하세요<br><span style="font-size:12px;color:#ddd;margin-top:8px;display:block">예: 백엔드 개발자 · PM · 마케터</span></div>
 {% endif %}
+</div>
+
+<div id="dp">
+  <div id="dp-head">
+    <h2 id="dp-title">자소서 초안</h2>
+    <button id="dp-close" onclick="closeDraft()">✕</button>
+  </div>
+  <div id="dp-body">
+    <div class="dp-job" id="dp-job-info"></div>
+    <div class="dp-qs">
+      <label>자소서 문항 (수정·추가 가능)</label>
+      <div id="dp-qlist"></div>
+      <button id="dp-add" onclick="addQ()">+ 문항 추가</button>
+    </div>
+    <button id="dp-gen" onclick="genDraft()">✨ 초안 생성</button>
+    <pre id="dp-out"></pre>
+    <button id="dp-copy" onclick="copyDraft()">📋 복사</button>
+  </div>
 </div>
 
 <script>
@@ -467,6 +509,59 @@ function clrF(){
   ['fd','fl','fc','fs'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=''});
   document.getElementById('fb').checked=false;
   filt();
+}
+
+const DEFAULT_QS=[
+  '1분 자기소개를 해주세요.',
+  '지원동기를 말씀해주세요.',
+  '본인의 강점과 약점을 설명해주세요.',
+  '입사 후 포부를 말씀해주세요.',
+  '직무 관련 경험이나 역량을 설명해주세요.',
+];
+let _dpJob=null;
+
+function openDraft(idx){
+  _dpJob=JOBS[idx];
+  if(!_dpJob)return;
+  document.getElementById('dp-title').textContent=_dpJob.company+' 자소서 초안';
+  document.getElementById('dp-job-info').innerHTML=`<strong>${_dpJob.title}</strong><span>${_dpJob.company}${_dpJob.stacks?' · '+_dpJob.stacks:''}</span>`;
+  const ql=document.getElementById('dp-qlist');
+  ql.innerHTML='';
+  DEFAULT_QS.forEach(q=>addQ(q));
+  document.getElementById('dp-out').style.display='none';
+  document.getElementById('dp-copy').style.display='none';
+  document.getElementById('dp-out').textContent='';
+  document.getElementById('dp').classList.add('open');
+}
+function closeDraft(){document.getElementById('dp').classList.remove('open');}
+function addQ(txt=''){
+  const ql=document.getElementById('dp-qlist');
+  const d=document.createElement('div');d.className='dp-q';
+  d.innerHTML=`<textarea rows="2">${txt}</textarea><button onclick="this.parentElement.remove()">✕</button>`;
+  ql.appendChild(d);
+}
+async function genDraft(){
+  const resume=document.getElementById('rv')?.value.trim();
+  if(!resume){alert('이력서를 먼저 입력하세요.');return;}
+  const qs=[...document.querySelectorAll('#dp-qlist textarea')].map(t=>t.value.trim()).filter(Boolean);
+  if(!qs.length){alert('문항을 입력하세요.');return;}
+  const btn=document.getElementById('dp-gen');
+  btn.disabled=true;btn.textContent='생성 중...';
+  try{
+    const resp=await fetch('/api/draft',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({resume,job:_dpJob,questions:qs})});
+    const d=await resp.json();
+    if(d.error){alert('오류: '+d.error);return;}
+    const out=document.getElementById('dp-out');
+    out.textContent=d.draft;out.style.display='block';
+    document.getElementById('dp-copy').style.display='inline-block';
+  }catch{alert('네트워크 오류');}
+  finally{btn.disabled=false;btn.textContent='✨ 초안 생성';}
+}
+function copyDraft(){
+  navigator.clipboard.writeText(document.getElementById('dp-out').textContent);
+  const b=document.getElementById('dp-copy');b.textContent='✓ 복사됨';
+  setTimeout(()=>b.textContent='📋 복사',1500);
 }
 
 async function matchJobs(){
@@ -605,6 +700,40 @@ def admin_delete_user(uid):
         return redirect(url_for("admin_page", msg="자신은 삭제할 수 없습니다.", err=1))
     db.delete_user(uid)
     return redirect(url_for("admin_page", msg="삭제 완료"))
+
+
+@app.route("/api/draft", methods=["POST"])
+@login_required
+def api_draft():
+    key = os.environ.get("DEEPSEEK_API_KEY")
+    if not key:
+        return jsonify({"error": "API key not configured"}), 503
+    data      = request.get_json(force=True) or {}
+    resume    = data.get("resume", "").strip()[:1500]
+    job       = data.get("job", {})
+    questions = data.get("questions", [])
+    if not resume or not questions:
+        return jsonify({"error": "resume and questions required"}), 400
+
+    qs_text = "\n".join(f"문항 {i+1}: {q}" for i, q in enumerate(questions))
+    prompt = (
+        f"지원자 이력서:\n{resume}\n\n"
+        f"지원 공고: {job.get('company','')} — {job.get('title','')}\n"
+        f"직무 스택: {job.get('stacks','')}\n"
+        f"경력 요건: {job.get('career','')}\n\n"
+        f"아래 자소서 문항에 대해 이력서를 최대한 활용해 구체적으로 답변을 작성해주세요.\n\n"
+        f"{qs_text}\n\n"
+        "각 문항을 '【문항 1】', '【문항 2】' 형식으로 구분해서 작성해주세요."
+    )
+    import requests as req
+    resp = req.post(
+        "https://api.deepseek.com/chat/completions",
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+        json={"model": "deepseek-chat", "messages": [{"role": "user", "content": prompt}], "temperature": 0.7},
+        timeout=90,
+    )
+    content = resp.json()["choices"][0]["message"]["content"].strip()
+    return jsonify({"draft": content})
 
 
 @app.route("/api/match", methods=["POST"])
