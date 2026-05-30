@@ -343,8 +343,9 @@ tr:hover td{background:#fafbff}
       <button id="match-btn" onclick="matchJobs()" style="background:#7c3aed;display:none">AI 매칭</button>
     </div>
   </div>
+  <div id="rv-structured" style="display:none;margin-top:10px;background:#f8f8ff;border-radius:8px;padding:12px;font-size:13px;border:1px solid #e0e0f0"></div>
   <div id="analyze-out" style="display:none;margin-top:10px;background:#f8f8ff;border-radius:8px;padding:12px;font-size:13px;line-height:1.7;border:1px solid #e0e0f0"></div>
-  <div class="mn">이력서는 서버에 저장됩니다. AI 매칭은 검색 결과에 적용됩니다.</div>
+  <div class="mn">이력서는 서버에 저장되며 자동으로 구조화됩니다.</div>
 </div>
 
 {% if q %}
@@ -384,6 +385,8 @@ tr:hover td{background:#fafbff}
     <option value="dday">마감 임박순</option>
     <option value="new">NEW 우선</option>
   </select>
+  <label style="margin-left:8px">AI매칭만</label>
+  <input type="checkbox" id="fai" onchange="filt()">
   <label style="margin-left:8px">북마크만</label>
   <input type="checkbox" id="fb" onchange="filt()">
   <span class="clr" onclick="clrF()">초기화</span>
@@ -531,15 +534,17 @@ function filt(){
   const loc=document.getElementById('fl')?.value||'';
   const car=document.getElementById('fc')?.value||'';
   const sort=document.getElementById('fs')?.value||'';
+  const aiOnly=document.getElementById('fai')?.checked;
   const bmOnly=document.getElementById('fb')?.checked;
   const b=gb();
   const rows=Array.from(document.querySelectorAll('.jr'));
   rows.forEach(r=>{
-    const rd=parseInt(r.dataset.dday),rl=r.dataset.loc||'',ri=r.dataset.id,rc=r.dataset.career||'';
+    const rd=parseInt(r.dataset.dday),rl=r.dataset.loc||'',ri=r.dataset.id,rc=r.dataset.career||'',rs=r.dataset.score;
     let show=true;
     if(dd&&(isNaN(rd)||rd>dd||rd<0))show=false;
     if(loc&&!rl.includes(loc))show=false;
     if(car&&rc!==car)show=false;
+    if(aiOnly&&!rs)show=false;
     if(bmOnly&&!b.includes(ri))show=false;
     r.style.display=show?'':'none';
   });
@@ -554,6 +559,7 @@ function filt(){
 function clrF(){
   ['fd','fl','fc','fs'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=''});
   document.getElementById('fb').checked=false;
+  const fai=document.getElementById('fai');if(fai)fai.checked=false;
   filt();
 }
 
@@ -669,11 +675,31 @@ async function matchJobs(){
   finally{btn.disabled=false;btn.textContent='AI 매칭';}
 }
 
+function renderStructured(s){
+  if(!s||!Object.keys(s).length)return;
+  const el=document.getElementById('rv-structured');
+  if(!el)return;
+  const rows=[];
+  if(s['이름'])rows.push(`<b>이름</b> ${s['이름']}`);
+  if(s['희망직군'])rows.push(`<b>희망직군</b> ${s['희망직군']}`);
+  if(s['경력'])rows.push(`<b>경력</b> ${s['경력']}`);
+  if(s['학력'])rows.push(`<b>학력</b> ${s['학력']}`);
+  if(s['기술스택']?.length)rows.push(`<b>기술스택</b> ${s['기술스택'].join(', ')}`);
+  if(s['자격증']?.length)rows.push(`<b>자격증</b> ${s['자격증'].join(', ')}`);
+  if(s['언어']?.length)rows.push(`<b>언어</b> ${s['언어'].join(', ')}`);
+  if(s['기타'])rows.push(`<b>기타</b> ${s['기타']}`);
+  if(!rows.length)return;
+  el.innerHTML='<div style="color:#888;font-size:11px;margin-bottom:6px">📋 구조화된 이력서</div>'+rows.map(r=>`<div style="margin-bottom:3px">${r}</div>`).join('');
+  el.style.display='block';
+}
+
 async function saveR(){
   const v=document.getElementById('rv')?.value.trim();
   if(!v)return;
   try{
-    await fetch('/api/resume',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:v})});
+    const resp=await fetch('/api/resume',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:v})});
+    const d=await resp.json();
+    if(d.structured)renderStructured(d.structured);
     alert('이력서 저장 완료');
   }catch{alert('저장 실패');}
 }
@@ -681,7 +707,7 @@ async function saveR(){
 window.addEventListener('load',async()=>{
   try{const r=await fetch('/api/bookmarks');const d=await r.json();_bm=d.job_ids||[];}catch{_bm=[];}
   initBM();updBC();
-  try{const r=await fetch('/api/resume');const d=await r.json();if(d.content&&document.getElementById('rv'))document.getElementById('rv').value=d.content;}catch{}
+  try{const r=await fetch('/api/resume');const d=await r.json();if(d.content&&document.getElementById('rv'))document.getElementById('rv').value=d.content;if(d.structured)renderStructured(d.structured);}catch{}
   const mp=document.getElementById('mp');
   if(mp)mp.style.display='';
   const matchBtn=document.getElementById('match-btn');
@@ -826,12 +852,13 @@ def api_analyze():
         return jsonify({"error": "이력서를 입력하세요"}), 400
     prompt = (
         f"다음 이력서를 분석해주세요.\n\n이력서:\n{resume}\n\n"
+        "각 항목마다 이력서의 구체적인 내용을 근거로 인용하세요. 일반적인 조언 금지.\n"
         "아래 형식의 HTML로만 응답하세요. 다른 텍스트 없이.\n\n"
         "<b>추천 검색 키워드</b><br>"
-        "<span class='kw-chip'>키워드1</span> <span class='kw-chip'>키워드2</span> ...(5~8개)<br><br>"
-        "<b>적합한 직군</b><br>한두 줄 설명<br><br>"
-        "<b>강점</b><br>핵심 강점 2~3가지<br><br>"
-        "<b>보완 포인트</b><br>부족한 스킬이나 경험 1~2가지"
+        "<span class='kw-chip'>키워드1</span> ...(5~8개)<br><br>"
+        "<b>적합한 직군</b><br>이력서 내용 인용하며 이유 설명<br><br>"
+        "<b>강점</b><br>이력서에서 확인된 강점 2~3가지 (인용 포함)<br><br>"
+        "<b>보완 포인트</b><br>직군 대비 이력서에서 빠진 항목 1~2가지"
     )
     try:
         resp = _req.post(
@@ -938,10 +965,31 @@ def api_match():
 def api_resume():
     uid = session["user_id"]
     if request.method == "POST":
-        content = (request.get_json(force=True) or {}).get("content", "")
-        db.save_resume(uid, content)
-        return jsonify({"ok": True})
-    return jsonify({"content": db.get_resume(uid)})
+        content = (request.get_json(force=True) or {}).get("content", "").strip()
+        structured = {}
+        key = os.environ.get("DEEPSEEK_API_KEY")
+        if key and content:
+            try:
+                prompt = (
+                    f"다음 이력서를 JSON으로 구조화하세요.\n\n이력서:\n{content[:2000]}\n\n"
+                    '아래 JSON 형식으로만 응답하세요. 없는 항목은 빈 값으로:\n'
+                    '{"이름":"","희망직군":"","경력":"","기술스택":[],"자격증":[],"학력":"","언어":[],"기타":""}'
+                )
+                r = _req.post(
+                    "https://api.deepseek.com/chat/completions",
+                    headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+                    json={"model": "deepseek-v4-flash", "messages": [{"role": "user", "content": prompt}], "temperature": 0.1},
+                    timeout=20,
+                )
+                raw = r.json()["choices"][0]["message"]["content"].strip()
+                raw = re.sub(r"^```json\s*|```$", "", raw, flags=re.MULTILINE).strip()
+                structured = json.loads(raw)
+            except Exception:
+                pass
+        db.save_resume(uid, content, structured if structured else None)
+        return jsonify({"ok": True, "structured": structured})
+    content, structured = db.get_resume(uid)
+    return jsonify({"content": content, "structured": structured})
 
 
 @app.route("/api/bookmarks", methods=["GET", "POST"])

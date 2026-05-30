@@ -69,14 +69,19 @@ def list_users():
 
 
 def get_resume(user_id):
-    r = _req.get(_url("resumes"), headers=_h(), params={"user_id": f"eq.{user_id}", "select": "content"}, timeout=10)
+    r = _req.get(_url("resumes"), headers=_h(), params={"user_id": f"eq.{user_id}", "select": "content,structured"}, timeout=10)
     data = r.json()
-    return data[0]["content"] if isinstance(data, list) and data else ""
+    if isinstance(data, list) and data:
+        return data[0].get("content", ""), data[0].get("structured", {})
+    return "", {}
 
 
-def save_resume(user_id, content):
+def save_resume(user_id, content, structured=None):
+    payload = {"content": content, "updated_at": datetime.utcnow().isoformat()}
+    if structured is not None:
+        payload["structured"] = structured
     _req.patch(_url("resumes"), headers=_h(), params={"user_id": f"eq.{user_id}"},
-               json={"content": content, "updated_at": datetime.utcnow().isoformat()}, timeout=10)
+               json=payload, timeout=10)
 
 
 def get_bookmarks(user_id):
