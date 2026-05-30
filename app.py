@@ -1,14 +1,21 @@
 import os
-import json
 import time
+import json
+import functools
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from flask import Flask, request, render_template_string
+from flask import Flask, request, render_template_string, redirect, url_for, session, jsonify
 from job_hunt import (
     search_saramin, search_jobkorea, search_groupby, search_jasoseol,
-    dedup, mark_new, save_seen
+    dedup, mark_new, save_seen,
 )
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
+
+_db_enabled = bool(os.environ.get("DATABASE_URL"))
+if _db_enabled:
+    import db
+    db.init_db()
 
 SIZE_SITES = {
     "all":     ["자소설닷컴", "사람인", "잡코리아", "그룹바이"],
@@ -18,10 +25,9 @@ SIZE_SITES = {
 }
 
 CACHE = {}
-CACHE_TTL = 600  # 10분
+CACHE_TTL = 600
 
-def _cache_key(q, size):
-    return f"{q}|{size}"
+def _cache_key(q, size): return f"{q}|{size}"
 
 def _get_cache(q, size):
     key = _cache_key(q, size)
@@ -36,10 +42,121 @@ def _set_cache(q, size, data):
 
 SCRAPERS = {
     "자소설닷컴": search_jasoseol,
-    "사람인": search_saramin,
-    "잡코리아": search_jobkorea,
-    "그룹바이": search_groupby,
+    "사람인":     search_saramin,
+    "잡코리아":   search_jobkorea,
+    "그룹바이":   search_groupby,
 }
+
+
+def login_required(f):
+    @functools.wraps(f)
+    def wrapped(*args, **kwargs):
+        if _db_enabled and not session.get("user_id"):
+            return redirect(url_for("login_page", next=request.path))
+        return f(*args, **kwargs)
+    return wrapped
+
+
+def admin_required(f):
+    @functools.wraps(f)
+    def wrapped(*args, **kwargs):
+        if not session.get("is_admin"):
+            return redirect(url_for("index"))
+        return f(*args, **kwargs)
+    return wrapped
+
+
+LOGIN_HTML = """<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>공고 사냥 - 로그인</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,'Noto Sans KR',sans-serif;background:#f0f2f5;display:flex;justify-content:center;align-items:center;min-height:100vh}
+.box{background:#fff;padding:40px;border-radius:12px;box-shadow:0 2px 16px rgba(0,0,0,.1);width:340px}
+h1{font-size:20px;font-weight:800;color:#1a1a2e;margin-bottom:24px;text-align:center}
+input{display:block;width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px;margin-bottom:12px;outline:none}
+input:focus{border-color:#1a1a2e}
+button{width:100%;padding:11px;background:#1a1a2e;color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer;font-weight:700}
+button:hover{background:#2d2d4e}
+.err{color:#e94560;font-size:13px;margin-bottom:12px;text-align:center}
+</style>
+</head>
+<body>
+<div class="box">
+  <h1>🎯 공고 사냥</h1>
+  {% if error %}<div class="err">{{ error }}</div>{% endif %}
+  <form method="post">
+    <input type="text" name="username" placeholder="아이디" required autofocus>
+    <input type="password" name="password" placeholder="비밀번호" required>
+    <button type="submit">로그인</button>
+  </form>
+</div>
+</body>
+</html>"""
+
+
+ADMIN_HTML = """<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>유저 관리</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,'Noto Sans KR',sans-serif;background:#f0f2f5;padding:32px}
+.wrap{max-width:680px;margin:0 auto}
+h1{font-size:18px;font-weight:800;color:#1a1a2e;margin-bottom:4px}
+.back{font-size:13px;color:#888;text-decoration:none;display:inline-block;margin-bottom:20px}
+.back:hover{color:#1a1a2e}
+h2{font-size:14px;font-weight:700;margin:20px 0 10px;color:#1a1a2e}
+table{width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.07)}
+th{background:#1a1a2e;color:#8888aa;font-size:11px;text-align:left;padding:9px 12px;font-weight:500}
+td{padding:10px 12px;border-bottom:1px solid #f2f2f2;font-size:13px}
+tr:last-child td{border-bottom:none}
+.del{background:#fce8e6;color:#e94560;border:none;border-radius:4px;padding:3px 9px;cursor:pointer;font-size:12px}
+.add-form{background:#fff;border-radius:8px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.07);display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.add-form input[type=text],.add-form input[type=password]{padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;flex:1;min-width:100px}
+.add-form label{font-size:13px;display:flex;align-items:center;gap:4px;white-space:nowrap}
+.add-form button{padding:8px 18px;background:#1a1a2e;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;font-weight:600}
+.msg{font-size:13px;color:#34a853;margin:8px 0}
+.merr{font-size:13px;color:#e94560;margin:8px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>👥 유저 관리</h1>
+  <a class="back" href="/">← 메인으로</a>
+  <h2>유저 목록 ({{ users|length }}명)</h2>
+  <table>
+    <tr><th>아이디</th><th>권한</th><th>가입일</th><th></th></tr>
+    {% for u in users %}
+    <tr>
+      <td>{{ u.username }}</td>
+      <td>{{ '관리자' if u.is_admin else '일반' }}</td>
+      <td style="color:#999">{{ u.created_at.strftime('%Y-%m-%d') if u.created_at else '-' }}</td>
+      <td>
+        {% if not u.is_admin %}
+        <form method="post" action="/admin/users/{{ u.id }}/delete" style="display:inline" onsubmit="return confirm('{{ u.username }} 삭제?')">
+          <button class="del">삭제</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  <h2>유저 추가</h2>
+  {% if msg %}<div class="{{ 'merr' if msg_err else 'msg' }}">{{ msg }}</div>{% endif %}
+  <form method="post" action="/admin/users" class="add-form">
+    <input type="text" name="username" placeholder="아이디" required>
+    <input type="password" name="password" placeholder="비밀번호" required>
+    <label><input type="checkbox" name="is_admin"> 관리자</label>
+    <button type="submit">추가</button>
+  </form>
+</div>
+</body>
+</html>"""
+
 
 HTML = """<!doctype html>
 <html lang="ko">
@@ -57,6 +174,9 @@ body{font-family:-apple-system,'Noto Sans KR',sans-serif;background:#f0f2f5;colo
 .search-row select{padding:8px 9px;border:none;border-radius:6px;font-size:13px;background:#fff;cursor:pointer}
 .search-row button{padding:8px 16px;background:#e94560;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;font-weight:700}
 .search-row button:hover{background:#c73652}
+.uinfo{display:flex;align-items:center;gap:10px;margin-left:auto;font-size:12px;white-space:nowrap}
+.uinfo a{color:#8888aa;text-decoration:none}
+.uinfo a:hover{color:#fff}
 
 #hist{position:absolute;top:38px;left:0;width:260px;background:#fff;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.15);z-index:100;display:none;overflow:hidden}
 #hist .hi{padding:9px 13px;font-size:13px;cursor:pointer;color:#333;display:flex;justify-content:space-between;align-items:center}
@@ -137,15 +257,22 @@ tr:hover td{background:#fafbff}
     </select>
     <button onclick="go()">검색</button>
   </div>
+  {% if current_user %}
+  <div class="uinfo">
+    <span style="color:#aaa">{{ current_user.username }}</span>
+    {% if current_user.is_admin %}<a href="/admin">관리</a>{% endif %}
+    <a href="/logout">로그아웃</a>
+  </div>
+  {% endif %}
 </div>
 
 <div class="mp" id="mp" style="display:none">
-  <h3>📄 이력서 매칭</h3>
+  <h3>📄 이력서</h3>
   <div class="mr">
     <textarea id="rv" placeholder="이력서 내용을 붙여넣으세요..."></textarea>
     <button onclick="saveR()">저장</button>
   </div>
-  <div class="mn">저장된 이력서는 로컬에 보관됩니다. DeepSeek API 키 설정 시 각 공고 매칭율이 표시됩니다.</div>
+  <div class="mn">이력서는 서버에 저장됩니다.</div>
 </div>
 
 {% if q %}
@@ -254,15 +381,19 @@ tr:hover td{background:#fafbff}
 </div>
 
 <script>
-const HK='jh_h', BK='jh_b', RK='jh_r';
+const HK='jh_h';
 const gh=()=>{try{return JSON.parse(localStorage.getItem(HK))||[]}catch{return[]}};
-const gb=()=>{try{return JSON.parse(localStorage.getItem(BK))||[]}catch{return[]}};
 const sh=v=>localStorage.setItem(HK,JSON.stringify(v));
-const sb=v=>localStorage.setItem(BK,JSON.stringify(v));
+let _bm=[];
+const gb=()=>_bm;
+const sb=async v=>{
+  _bm=v;
+  try{await fetch('/api/bookmarks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({job_ids:v})})}catch{}
+};
 
 function addH(q){if(!q)return;let h=gh().filter(x=>x!==q);h.unshift(q);sh(h.slice(0,8))}
 function renderH(){
-  const box=document.getElementById('hist'), h=gh();
+  const box=document.getElementById('hist'),h=gh();
   if(!h.length){box.style.display='none';return}
   box.innerHTML=h.map(q=>`<div class="hi" onclick="pickH('${q}')"><span>${q}</span><span class="hx" onclick="delH(event,'${q}')">✕</span></div>`).join('');
   box.style.display='block';
@@ -280,19 +411,18 @@ function go(){
 }
 document.getElementById('qi').addEventListener('keydown',e=>{if(e.key==='Enter')go()});
 
-function bm(btn,id){
-  let b=gb();
+async function bm(btn,id){
+  let b=gb().slice();
   if(b.includes(id)){b=b.filter(x=>x!==id);btn.textContent='☆'}
   else{b.push(id);btn.textContent='⭐'}
-  sb(b);updBC();
-  if(document.getElementById('fb')&&document.getElementById('fb').checked)filt();
+  await sb(b);updBC();
+  if(document.getElementById('fb')?.checked)filt();
 }
 function initBM(){
   const b=gb();
   document.querySelectorAll('.jr').forEach(r=>{
     if(b.includes(r.dataset.id))r.querySelector('.bm').textContent='⭐';
   });
-  updBC();
 }
 function updBC(){const el=document.getElementById('bc');if(el)el.textContent=gb().length}
 
@@ -334,17 +464,19 @@ function clrF(){
   filt();
 }
 
-function saveR(){
+async function saveR(){
   const v=document.getElementById('rv')?.value.trim();
   if(!v)return;
-  localStorage.setItem(RK,v);
-  alert('이력서 저장 완료');
+  try{
+    await fetch('/api/resume',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:v})});
+    alert('이력서 저장 완료');
+  }catch{alert('저장 실패');}
 }
 
-window.addEventListener('load',()=>{
-  initBM();
-  const rv=localStorage.getItem(RK);
-  if(rv&&document.getElementById('rv'))document.getElementById('rv').value=rv;
+window.addEventListener('load',async()=>{
+  try{const r=await fetch('/api/bookmarks');const d=await r.json();_bm=d.job_ids||[];}catch{_bm=[];}
+  initBM();updBC();
+  try{const r=await fetch('/api/resume');const d=await r.json();if(d.content&&document.getElementById('rv'))document.getElementById('rv').value=d.content;}catch{}
   const mp=document.getElementById('mp');
   if(mp)mp.style.display='';
 });
@@ -360,8 +492,7 @@ def _run(q, size):
 
     def fetch(name, fn):
         try:
-            jobs = fn(q)
-            return name, jobs
+            return name, fn(q)
         except Exception:
             return name, []
 
@@ -375,12 +506,99 @@ def _run(q, size):
     return raw, counts
 
 
+@app.route("/login", methods=["GET", "POST"])
+def login_page():
+    if not _db_enabled:
+        return redirect(url_for("index"))
+    if session.get("user_id"):
+        return redirect(url_for("index"))
+    error = None
+    if request.method == "POST":
+        user = db.check_password(request.form["username"], request.form["password"])
+        if user:
+            session["user_id"]  = user["id"]
+            session["username"] = user["username"]
+            session["is_admin"] = user["is_admin"]
+            return redirect(request.args.get("next") or url_for("index"))
+        error = "아이디 또는 비밀번호가 올바르지 않습니다."
+    return render_template_string(LOGIN_HTML, error=error)
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login_page") if _db_enabled else url_for("index"))
+
+
+@app.route("/admin")
+@login_required
+@admin_required
+def admin_page():
+    users   = db.list_users()
+    msg     = request.args.get("msg")
+    msg_err = request.args.get("err")
+    return render_template_string(ADMIN_HTML, users=users, msg=msg, msg_err=msg_err)
+
+
+@app.route("/admin/users", methods=["POST"])
+@login_required
+@admin_required
+def admin_add_user():
+    username = request.form.get("username", "").strip()
+    password = request.form.get("password", "").strip()
+    is_admin = bool(request.form.get("is_admin"))
+    if not username or not password:
+        return redirect(url_for("admin_page", msg="아이디와 비밀번호를 입력하세요.", err=1))
+    try:
+        db.create_user(username, password, is_admin)
+        return redirect(url_for("admin_page", msg=f"{username} 추가 완료"))
+    except Exception as e:
+        return redirect(url_for("admin_page", msg=f"오류: {e}", err=1))
+
+
+@app.route("/admin/users/<int:uid>/delete", methods=["POST"])
+@login_required
+@admin_required
+def admin_delete_user(uid):
+    if uid == session.get("user_id"):
+        return redirect(url_for("admin_page", msg="자신은 삭제할 수 없습니다.", err=1))
+    db.delete_user(uid)
+    return redirect(url_for("admin_page", msg="삭제 완료"))
+
+
+@app.route("/api/resume", methods=["GET", "POST"])
+@login_required
+def api_resume():
+    uid = session["user_id"]
+    if request.method == "POST":
+        content = (request.get_json(force=True) or {}).get("content", "")
+        db.save_resume(uid, content)
+        return jsonify({"ok": True})
+    return jsonify({"content": db.get_resume(uid)})
+
+
+@app.route("/api/bookmarks", methods=["GET", "POST"])
+@login_required
+def api_bookmarks():
+    uid = session["user_id"]
+    if request.method == "POST":
+        job_ids = (request.get_json(force=True) or {}).get("job_ids", [])
+        db.save_bookmarks(uid, job_ids)
+        return jsonify({"ok": True})
+    return jsonify({"job_ids": db.get_bookmarks(uid)})
+
+
 @app.route("/")
+@login_required
 def index():
-    q    = request.args.get("q", "").strip()
-    size = request.args.get("size", "all")
-    label = {"all":"전체","big":"대기업","corp":"중견·중소","startup":"스타트업"}.get(size,"전체")
+    q     = request.args.get("q", "").strip()
+    size  = request.args.get("size", "all")
+    label = {"all": "전체", "big": "대기업", "corp": "중견·중소", "startup": "스타트업"}.get(size, "전체")
     results, duped, counts, locs = [], 0, {}, []
+    current_user = (
+        {"username": session.get("username"), "is_admin": session.get("is_admin")}
+        if _db_enabled else None
+    )
 
     if q:
         cached = _get_cache(q, size)
@@ -388,9 +606,9 @@ def index():
             results, duped, counts = cached
         else:
             raw, counts = _run(q, size)
-            deduped  = dedup(raw)
-            results  = mark_new(deduped)
-            duped    = len(raw) - len(deduped)
+            deduped = dedup(raw)
+            results = mark_new(deduped)
+            duped   = len(raw) - len(deduped)
             _set_cache(q, size, (results, duped, counts))
         locs = sorted({(j.get("location") or "").strip().split()[0]
                        for j in results if j.get("location")} - {""})
@@ -398,6 +616,7 @@ def index():
     return render_template_string(
         HTML, q=q, size=size, size_label=label,
         results=results, duped=duped, site_counts=counts, locations=locs,
+        current_user=current_user,
     )
 
 
