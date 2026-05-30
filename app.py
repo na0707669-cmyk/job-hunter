@@ -339,7 +339,7 @@ tr:hover td{background:#fafbff}
     <textarea id="rv" placeholder="이력서 내용을 붙여넣으세요 (자격증, 스킬, 경력 등)..."></textarea>
     <div style="display:flex;flex-direction:column;gap:6px">
       <button onclick="saveR()">저장</button>
-      <button id="match-btn" onclick="matchJobs()" style="background:#7c3aed">AI 매칭</button>
+      <button id="match-btn" onclick="matchJobs()" style="background:#7c3aed;display:none">AI 매칭</button>
     </div>
   </div>
   <div class="mn">이력서는 서버에 저장됩니다. AI 매칭은 현재 검색 결과에 적용됩니다.</div>
@@ -658,7 +658,11 @@ window.addEventListener('load',async()=>{
   try{const r=await fetch('/api/resume');const d=await r.json();if(d.content&&document.getElementById('rv'))document.getElementById('rv').value=d.content;}catch{}
   const mp=document.getElementById('mp');
   if(mp)mp.style.display='';
-  if(JOBS&&JOBS.length>0&&document.getElementById('rv')?.value.trim())matchJobs();
+  const matchBtn=document.getElementById('match-btn');
+  if(JOBS&&JOBS.length>0){
+    if(matchBtn)matchBtn.style.display='';
+    if(document.getElementById('rv')?.value.trim())matchJobs();
+  }
 });
 </script>
 </body>
