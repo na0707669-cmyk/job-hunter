@@ -1,5 +1,7 @@
 import sys
 import json
+import re
+from datetime import datetime
 from urllib.parse import quote
 
 import requests
@@ -10,6 +12,7 @@ sys.stdin.reconfigure(encoding="utf-8")
 sys.stdout.reconfigure(encoding="utf-8")
 
 _pw_browser = None
+
 
 def _get_browser():
     global _pw_browser
@@ -24,6 +27,7 @@ def _pw_page(url, wait="networkidle", timeout=20000):
     page.goto(url, wait_until=wait, timeout=timeout)
     return page
 
+
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -32,12 +36,17 @@ HEADERS = {
     )
 }
 
-SIZE_SITES = {
-    "1": ["자소설닷컴", "사람인", "잡코리아", "그룹바이"],  # 전체
-    "2": ["자소설닷컴"],                                    # 대기업
-    "3": ["사람인", "잡코리아"],                            # 중견·중소
-    "4": ["그룹바이"],                                      # 스타트업
-}
+
+def _parse_dday(deadline_str):
+    if not deadline_str:
+        return None
+    for fmt in ("%Y.%m.%d", "%Y/%m/%d"):
+        try:
+            dt = datetime.strptime(deadline_str[:10], fmt)
+            return (dt - datetime.now()).days
+        except Exception:
+            pass
+    return None
 
 
 def get(url):
@@ -53,14 +62,26 @@ def search_saramin(keyword):
     for item in soup.select(".item_recruit"):
         title_el = item.select_one(".job_tit a")
         company_el = item.select_one(".corp_name a")
-        if title_el and company_el:
-            jobs.append({
-                "site": "사람인",
-                "size": "대기업·중소",
-                "company": company_el.get_text(strip=True),
-                "title": title_el.get_text(strip=True),
-                "link": "https://www.saramin.co.kr" + title_el.get("href", ""),
-            })
+        if not (title_el and company_el):
+            continue
+        deadline = ""
+        date_el = item.select_one(".job_date .date")
+        if date_el:
+            deadline = date_el.get_text(strip=True).replace("~", "").strip()
+        location = ""
+        loc_el = item.select_one(".job_condition span")
+        if loc_el:
+            location = loc_el.get_text(strip=True)
+        jobs.append({
+            "site": "사람인",
+            "size": "대기업·중소",
+            "company": company_el.get_text(strip=True),
+            "title": title_el.get_text(strip=True),
+            "link": "https://www.saramin.co.kr" + title_el.get("href", ""),
+            "deadline": deadline,
+            "dday": _parse_dday(deadline),
+            "location": location,
+        })
     return jobs
 
 
@@ -73,14 +94,29 @@ def search_jobkorea(keyword):
     cards = [d for d in soup.find_all("div") if "hover:bg-blue54" in " ".join(d.get("class", []))]
     for card in cards:
         a_tags = [a for a in card.select('a[href*="/Recruit/GI_Read/"]') if a.get_text(strip=True)]
-        if len(a_tags) >= 2:
-            jobs.append({
-                "site": "잡코리아",
-                "size": "중견·중소",
-                "company": a_tags[1].get_text(strip=True),
-                "title": a_tags[0].get_text(strip=True),
-                "link": a_tags[0].get("href", ""),
-            })
+        if len(a_tags) < 2:
+            continue
+        parts = [t.strip() for t in card.get_text(separator="|").split("|") if t.strip()]
+        deadline = ""
+        for p in parts:
+            if re.match(r"D-\d+|즉시", p):
+                deadline = p
+                break
+        location = ""
+        for p in parts:
+            if any(c in p for c in ["서울", "경기", "부산", "인천", "대구", "대전", "광주", "울산"]):
+                location = p.split()[0]
+                break
+        jobs.append({
+            "site": "잡코리아",
+            "size": "중견·중소",
+            "company": a_tags[1].get_text(strip=True),
+            "title": a_tags[0].get_text(strip=True),
+            "link": a_tags[0].get("href", ""),
+            "deadline": deadline,
+            "dday": None,
+            "location": location,
+        })
     return jobs
 
 
@@ -96,8 +132,16 @@ def search_jasoseol(keyword):
             continue
         for a in parent.query_selector_all('a[href*="/recruit/"]'):
             title_el = a.query_selector('[class*="employment-title"]')
+            period_el = a.query_selector('[class*="employment-period"]')
             if not title_el:
                 continue
+            deadline = ""
+            dday = None
+            if period_el:
+                m = re.search(r"(\d{4}\.\d{2}\.\d{2})", period_el.inner_text())
+                if m:
+                    deadline = m.group(1)
+                    dday = _parse_dday(deadline)
             href = a.get_attribute("href") or ""
             jobs.append({
                 "site": "자소설닷컴",
@@ -105,6 +149,9 @@ def search_jasoseol(keyword):
                 "company": company,
                 "title": title_el.inner_text().strip(),
                 "link": "https://jasoseol.com" + href,
+                "deadline": deadline,
+                "dday": dday,
+                "location": "서울",
             })
     page.close()
     return jobs
@@ -142,6 +189,10 @@ def search_groupby(keyword):
             "stacks": ", ".join(p.get("techStacks", [])[:5]),
             "career": p.get("careerType", ""),
             "location": startup.get("location", ""),
+            "deadline": "",
+            "dday": None,
+            "funding": startup.get("fundingRound", ""),
+            "members": startup.get("memberCount", ""),
         })
     return jobs
 
@@ -157,50 +208,22 @@ def dedup(jobs):
     return result
 
 
-def print_jobs(jobs):
-    for i, j in enumerate(jobs, 1):
-        career = f" [{j.get('career')}]" if j.get("career") else ""
-        location = f" {j.get('location')}" if j.get("location") else ""
-        stacks = f"\n     스택: {j['stacks']}" if j.get("stacks") else ""
-        print(f"{i:>3}. [{j['site']}·{j['size']}] {j['company']}{career}{location}")
-        print(f"     {j['title']}{stacks}")
-        print(f"     {j['link']}")
+def load_seen():
+    try:
+        with open("seen.json", "r", encoding="utf-8") as f:
+            return set(json.load(f))
+    except Exception:
+        return set()
 
 
-if __name__ == "__main__":
-    keyword = input("검색 키워드: ").strip()
-    print("기업 규모 선택:")
-    print("  1. 전체")
-    print("  2. 대기업 (자소설닷컴)")
-    print("  3. 중견·중소 (사람인 + 잡코리아)")
-    print("  4. 스타트업 (그룹바이)")
-    size_choice = input("선택 (기본 1): ").strip() or "1"
-    target_sites = SIZE_SITES.get(size_choice, SIZE_SITES["1"])
+def save_seen(jobs):
+    ids = [f"{j['company']}|{j['title']}" for j in jobs]
+    with open("seen.json", "w", encoding="utf-8") as f:
+        json.dump(ids, f, ensure_ascii=False)
 
-    scrapers = {
-        "자소설닷컴": search_jasoseol,
-        "사람인": search_saramin,
-        "잡코리아": search_jobkorea,
-        "그룹바이": search_groupby,
-    }
 
-    raw = []
-    for name, fn in scrapers.items():
-        if name not in target_sites:
-            continue
-        try:
-            jobs = fn(keyword)
-            raw += jobs
-            print(f"  [{name}] {len(jobs)}개 수집")
-        except Exception as e:
-            print(f"  [{name}] 실패: {e}")
-
-    results = dedup(raw)
-    removed = len(raw) - len(results)
-
-    print(f"\n중복 제거: {removed}개 제거 → 최종 {len(results)}개\n")
-    print_jobs(results)
-
-    with open("results.json", "w", encoding="utf-8") as f:
-        json.dump(results, f, ensure_ascii=False, indent=2)
-    print(f"\n→ results.json 저장 완료")
+def mark_new(jobs):
+    seen = load_seen()
+    for j in jobs:
+        j["is_new"] = f"{j['company']}|{j['title']}" not in seen
+    return jobs
