@@ -671,14 +671,30 @@ def login_page():
         return redirect(url_for("index"))
     error = None
     if request.method == "POST":
-        user = db.check_password(request.form["username"], request.form["password"])
-        if user:
-            session["user_id"]  = user["id"]
-            session["username"] = user["username"]
-            session["is_admin"] = user["is_admin"]
-            return redirect(request.args.get("next") or url_for("index"))
-        error = "아이디 또는 비밀번호가 올바르지 않습니다."
+        try:
+            user = db.check_password(request.form["username"], request.form["password"])
+            if user:
+                session["user_id"]  = user["id"]
+                session["username"] = user["username"]
+                session["is_admin"] = user["is_admin"]
+                return redirect(request.args.get("next") or url_for("index"))
+            error = "아이디 또는 비밀번호가 올바르지 않습니다."
+        except Exception as e:
+            print(f"[LOGIN ERROR] {e}")
+            error = f"DB 오류: {e}"
     return render_template_string(LOGIN_HTML, error=error)
+
+
+@app.route("/health")
+def health():
+    status = {"db_enabled": _db_enabled}
+    if _db_enabled:
+        try:
+            db.init_db()
+            status["db"] = "ok"
+        except Exception as e:
+            status["db"] = f"error: {e}"
+    return jsonify(status)
 
 
 @app.route("/logout")
