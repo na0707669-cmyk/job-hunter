@@ -15,7 +15,7 @@ from job_hunt import (
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
 
-_db_enabled = bool(os.environ.get("DATABASE_URL"))
+_db_enabled = bool(os.environ.get("SUPABASE_URL"))
 if _db_enabled:
     import db
     try:
@@ -179,7 +179,7 @@ tr:last-child td{border-bottom:none}
     <tr>
       <td>{{ u.username }}</td>
       <td>{{ '관리자' if u.is_admin else '일반' }}</td>
-      <td style="color:#999">{{ u.created_at.strftime('%Y-%m-%d') if u.created_at else '-' }}</td>
+      <td style="color:#999">{{ u.created_at[:10] if u.created_at else '-' }}</td>
       <td>
         {% if not u.is_admin %}
         <form method="post" action="/admin/users/{{ u.id }}/delete" style="display:inline" onsubmit="return confirm('{{ u.username }} 삭제?')">
