@@ -519,6 +519,7 @@ window.addEventListener('load',async()=>{
   try{const r=await fetch('/api/resume');const d=await r.json();if(d.content&&document.getElementById('rv'))document.getElementById('rv').value=d.content;}catch{}
   const mp=document.getElementById('mp');
   if(mp)mp.style.display='';
+  if(JOBS&&JOBS.length>0&&document.getElementById('rv')?.value.trim())matchJobs();
 });
 </script>
 </body>
