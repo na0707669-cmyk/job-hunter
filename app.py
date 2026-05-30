@@ -659,10 +659,7 @@ window.addEventListener('load',async()=>{
   const mp=document.getElementById('mp');
   if(mp)mp.style.display='';
   const matchBtn=document.getElementById('match-btn');
-  if(JOBS&&JOBS.length>0){
-    if(matchBtn)matchBtn.style.display='';
-    if(document.getElementById('rv')?.value.trim())matchJobs();
-  }
+  if(JOBS&&JOBS.length>0&&matchBtn)matchBtn.style.display='';
 });
 </script>
 </body>
@@ -822,14 +819,17 @@ def api_draft():
         f"{qs_text}\n\n"
         "각 문항을 '【문항 1】', '【문항 2】' 형식으로 구분해서 작성해주세요."
     )
-    import requests as req
-    resp = req.post(
-        "https://api.deepseek.com/chat/completions",
-        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-        json={"model": "deepseek-v4-flash", "messages": [{"role": "user", "content": prompt}], "temperature": 0.7},
-        timeout=90,
-    )
-    content = resp.json()["choices"][0]["message"]["content"].strip()
+    try:
+        resp = _req.post(
+            "https://api.deepseek.com/chat/completions",
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            json={"model": "deepseek-v4-flash", "messages": [{"role": "user", "content": prompt}], "temperature": 0.7},
+            timeout=90,
+        )
+        resp.raise_for_status()
+        content = resp.json()["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        return jsonify({"error": f"DeepSeek 호출 실패: {e}"}), 500
     return jsonify({"draft": content})
 
 
@@ -857,18 +857,21 @@ def api_match():
         "JSON 배열만 반환하세요. 다른 텍스트 없이.\n"
         '형식: [{"idx":0,"score":85,"reason":"한줄이유"}, ...]'
     )
-    import requests as req
-    resp = req.post(
-        "https://api.deepseek.com/chat/completions",
-        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-        json={"model": "deepseek-v4-flash", "messages": [{"role": "user", "content": prompt}], "temperature": 0.3},
-        timeout=60,
-    )
-    content = resp.json()["choices"][0]["message"]["content"].strip()
+    try:
+        resp = _req.post(
+            "https://api.deepseek.com/chat/completions",
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            json={"model": "deepseek-v4-flash", "messages": [{"role": "user", "content": prompt}], "temperature": 0.3},
+            timeout=60,
+        )
+        resp.raise_for_status()
+        content = resp.json()["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        return jsonify({"error": f"DeepSeek 호출 실패: {e}"}), 500
     m = re.search(r"\[.*\]", content, re.DOTALL)
     if m:
         return jsonify({"scores": json.loads(m.group())})
-    return jsonify({"error": "parse error"}), 500
+    return jsonify({"error": "응답 파싱 실패", "raw": content[:200]}), 500
 
 
 @app.route("/api/resume", methods=["GET", "POST"])
