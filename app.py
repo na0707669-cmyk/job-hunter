@@ -88,12 +88,7 @@ def admin_required(f):
     return wrapped
 
 
-LOGIN_HTML = """<!doctype html>
-<html lang="ko">
-<head>
-<meta charset="utf-8">
-<title>공고 사냥 - 로그인</title>
-<style>
+_AUTH_STYLE = """
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,'Noto Sans KR',sans-serif;background:#f0f2f5;display:flex;justify-content:center;align-items:center;min-height:100vh}
 .box{background:#fff;padding:40px;border-radius:12px;box-shadow:0 2px 16px rgba(0,0,0,.1);width:340px}
@@ -103,8 +98,15 @@ input:focus{border-color:#1a1a2e}
 button{width:100%;padding:11px;background:#1a1a2e;color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer;font-weight:700}
 button:hover{background:#2d2d4e}
 .err{color:#e94560;font-size:13px;margin-bottom:12px;text-align:center}
-</style>
-</head>
+.ok{color:#34a853;font-size:13px;margin-bottom:12px;text-align:center}
+.sub{text-align:center;margin-top:14px;font-size:13px;color:#888}
+.sub a{color:#1a1a2e;text-decoration:underline}
+"""
+
+LOGIN_HTML = """<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><title>공고 사냥 - 로그인</title>
+<style>""" + _AUTH_STYLE + """</style></head>
 <body>
 <div class="box">
   <h1>🎯 공고 사냥</h1>
@@ -114,6 +116,27 @@ button:hover{background:#2d2d4e}
     <input type="password" name="password" placeholder="비밀번호" required>
     <button type="submit">로그인</button>
   </form>
+  <div class="sub">계정이 없으신가요? <a href="/register">회원가입</a></div>
+</div>
+</body>
+</html>"""
+
+REGISTER_HTML = """<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><title>공고 사냥 - 회원가입</title>
+<style>""" + _AUTH_STYLE + """</style></head>
+<body>
+<div class="box">
+  <h1>🎯 회원가입</h1>
+  {% if error %}<div class="err">{{ error }}</div>{% endif %}
+  {% if ok %}<div class="ok">{{ ok }}</div>{% endif %}
+  <form method="post">
+    <input type="text" name="username" placeholder="아이디 (영문/숫자)" required autofocus>
+    <input type="password" name="password" placeholder="비밀번호" required>
+    <input type="password" name="password2" placeholder="비밀번호 확인" required>
+    <button type="submit">가입하기</button>
+  </form>
+  <div class="sub">이미 계정이 있으신가요? <a href="/login">로그인</a></div>
 </div>
 </body>
 </html>"""
@@ -695,6 +718,32 @@ def health():
         except Exception as e:
             status["db"] = f"error: {e}"
     return jsonify(status)
+
+
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    if not _db_enabled:
+        return redirect(url_for("index"))
+    if session.get("user_id"):
+        return redirect(url_for("index"))
+    error = ok = None
+    if request.method == "POST":
+        username  = request.form.get("username","").strip()
+        password  = request.form.get("password","")
+        password2 = request.form.get("password2","")
+        if not username or not password:
+            error = "아이디와 비밀번호를 입력하세요."
+        elif password != password2:
+            error = "비밀번호가 일치하지 않습니다."
+        elif len(password) < 6:
+            error = "비밀번호는 6자 이상이어야 합니다."
+        else:
+            try:
+                db.create_user(username, password, is_admin=False)
+                ok = "가입 완료! 로그인해주세요."
+            except Exception as e:
+                error = "이미 사용 중인 아이디이거나 오류가 발생했습니다."
+    return render_template_string(REGISTER_HTML, error=error, ok=ok)
 
 
 @app.route("/logout")
