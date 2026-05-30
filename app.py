@@ -3,6 +3,8 @@ import re
 import time
 import json
 import functools
+import requests as _req
+from bs4 import BeautifulSoup as _BS
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from flask import Flask, request, render_template_string, redirect, url_for, session, jsonify
 from job_hunt import (
@@ -50,6 +52,22 @@ SCRAPERS = {
     "잡코리아":   search_jobkorea,
     "그룹바이":   search_groupby,
 }
+
+
+_HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+
+def _fetch_company_info(url, site):
+    if not url or site == "자소설닷컴":
+        return ""
+    try:
+        r = _req.get(url, headers=_HEADERS, timeout=8)
+        soup = _BS(r.text, "html.parser")
+        for tag in soup(["script", "style", "nav", "header", "footer"]):
+            tag.decompose()
+        text = re.sub(r"\s+", " ", soup.get_text()).strip()
+        return text[300:2500]
+    except Exception:
+        return ""
 
 
 def login_required(f):
@@ -725,6 +743,9 @@ def api_draft():
     if job.get("funding"):  company_info += f"투자 단계: {job['funding']}\n"
     if job.get("members"):  company_info += f"직원 수: {job['members']}명\n"
     if job.get("location"): company_info += f"위치: {job['location']}\n"
+    scraped = _fetch_company_info(job.get("link",""), job.get("site",""))
+    if scraped:
+        company_info += f"\n[공고 페이지에서 수집한 회사/직무 정보]\n{scraped}\n"
     prompt = (
         f"지원자 이력서:\n{resume}\n\n"
         f"{company_info}\n"
@@ -736,7 +757,7 @@ def api_draft():
     resp = req.post(
         "https://api.deepseek.com/chat/completions",
         headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-        json={"model": "deepseek-chat", "messages": [{"role": "user", "content": prompt}], "temperature": 0.7},
+        json={"model": "deepseek-v4-flash", "messages": [{"role": "user", "content": prompt}], "temperature": 0.7},
         timeout=90,
     )
     content = resp.json()["choices"][0]["message"]["content"].strip()
@@ -771,7 +792,7 @@ def api_match():
     resp = req.post(
         "https://api.deepseek.com/chat/completions",
         headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-        json={"model": "deepseek-chat", "messages": [{"role": "user", "content": prompt}], "temperature": 0.3},
+        json={"model": "deepseek-v4-flash", "messages": [{"role": "user", "content": prompt}], "temperature": 0.3},
         timeout=60,
     )
     content = resp.json()["choices"][0]["message"]["content"].strip()
