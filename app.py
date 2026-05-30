@@ -16,7 +16,10 @@ app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
 _db_enabled = bool(os.environ.get("DATABASE_URL"))
 if _db_enabled:
     import db
-    db.init_db()
+    try:
+        db.init_db()
+    except Exception as e:
+        print(f"[WARN] DB init failed: {e} — running without DB")
 
 SIZE_SITES = {
     "all":     ["자소설닷컴", "사람인", "잡코리아", "그룹바이"],
@@ -716,12 +719,16 @@ def api_draft():
         return jsonify({"error": "resume and questions required"}), 400
 
     qs_text = "\n".join(f"문항 {i+1}: {q}" for i, q in enumerate(questions))
+    company_info = f"지원 공고: {job.get('company','')} — {job.get('title','')}\n"
+    if job.get("stacks"):   company_info += f"기술 스택: {job['stacks']}\n"
+    if job.get("career"):   company_info += f"경력 요건: {job['career']}\n"
+    if job.get("funding"):  company_info += f"투자 단계: {job['funding']}\n"
+    if job.get("members"):  company_info += f"직원 수: {job['members']}명\n"
+    if job.get("location"): company_info += f"위치: {job['location']}\n"
     prompt = (
         f"지원자 이력서:\n{resume}\n\n"
-        f"지원 공고: {job.get('company','')} — {job.get('title','')}\n"
-        f"직무 스택: {job.get('stacks','')}\n"
-        f"경력 요건: {job.get('career','')}\n\n"
-        f"아래 자소서 문항에 대해 이력서를 최대한 활용해 구체적으로 답변을 작성해주세요.\n\n"
+        f"{company_info}\n"
+        f"아래 자소서 문항에 대해 이력서와 회사 정보를 최대한 활용해 구체적으로 답변을 작성해주세요.\n\n"
         f"{qs_text}\n\n"
         "각 문항을 '【문항 1】', '【문항 2】' 형식으로 구분해서 작성해주세요."
     )
