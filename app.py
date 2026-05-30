@@ -1,5 +1,6 @@
 import os
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from flask import Flask, request, render_template_string
 from job_hunt import (
     search_saramin, search_jobkorea, search_groupby, search_jasoseol,
@@ -326,16 +327,23 @@ window.addEventListener('load',()=>{
 
 def _run(q, size):
     target = SIZE_SITES.get(size, SIZE_SITES["all"])
+    tasks = {name: fn for name, fn in SCRAPERS.items() if name in target}
     raw, counts = [], {}
-    for name, fn in SCRAPERS.items():
-        if name not in target:
-            continue
+
+    def fetch(name, fn):
         try:
             jobs = fn(q)
+            return name, jobs
+        except Exception:
+            return name, []
+
+    with ThreadPoolExecutor(max_workers=len(tasks)) as ex:
+        futures = {ex.submit(fetch, name, fn): name for name, fn in tasks.items()}
+        for future in as_completed(futures):
+            name, jobs = future.result()
             raw += jobs
             counts[name] = len(jobs)
-        except Exception:
-            counts[name] = 0
+
     return raw, counts
 
 
