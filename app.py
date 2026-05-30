@@ -1,4 +1,5 @@
 import os
+import re
 import time
 import json
 import functools
@@ -269,10 +270,13 @@ tr:hover td{background:#fafbff}
 <div class="mp" id="mp" style="display:none">
   <h3>📄 이력서</h3>
   <div class="mr">
-    <textarea id="rv" placeholder="이력서 내용을 붙여넣으세요..."></textarea>
-    <button onclick="saveR()">저장</button>
+    <textarea id="rv" placeholder="이력서 내용을 붙여넣으세요 (자격증, 스킬, 경력 등)..."></textarea>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <button onclick="saveR()">저장</button>
+      <button id="match-btn" onclick="matchJobs()" style="background:#7c3aed">AI 매칭</button>
+    </div>
   </div>
-  <div class="mn">이력서는 서버에 저장됩니다.</div>
+  <div class="mn">이력서는 서버에 저장됩니다. AI 매칭은 현재 검색 결과에 적용됩니다.</div>
 </div>
 
 {% if q %}
@@ -381,6 +385,7 @@ tr:hover td{background:#fafbff}
 </div>
 
 <script>
+const JOBS={{ results|tojson }};
 const HK='jh_h';
 const gh=()=>{try{return JSON.parse(localStorage.getItem(HK))||[]}catch{return[]}};
 const sh=v=>localStorage.setItem(HK,JSON.stringify(v));
@@ -453,7 +458,7 @@ function filt(){
   if(sort){
     const tbody=document.getElementById('tb-body');
     const vis=rows.filter(r=>r.style.display!=='none');
-    vis.sort((a,z)=>sort==='dday'?parseInt(a.dataset.dday)-parseInt(z.dataset.dday):(z.dataset.isnew==='y')-(a.dataset.isnew==='y'));
+    vis.sort((a,z)=>sort==='dday'?parseInt(a.dataset.dday)-parseInt(z.dataset.dday):sort==='score'?parseInt(z.dataset.score||0)-parseInt(a.dataset.score||0):(z.dataset.isnew==='y')-(a.dataset.isnew==='y'));
     vis.forEach(r=>tbody.appendChild(r));
   }
   let n=1;rows.forEach(r=>{if(r.style.display!=='none')r.cells[0].textContent=n++});
@@ -462,6 +467,41 @@ function clrF(){
   ['fd','fl','fc','fs'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=''});
   document.getElementById('fb').checked=false;
   filt();
+}
+
+async function matchJobs(){
+  const resume=document.getElementById('rv')?.value.trim();
+  if(!resume){alert('이력서를 먼저 입력/저장하세요.');return;}
+  if(!JOBS||!JOBS.length){alert('먼저 공고를 검색하세요.');return;}
+  const btn=document.getElementById('match-btn');
+  btn.disabled=true;btn.textContent='분석 중...';
+  try{
+    const resp=await fetch('/api/match',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({resume,jobs:JOBS})});
+    const data=await resp.json();
+    if(data.error){alert('오류: '+data.error);return;}
+    data.scores.forEach(({idx,score,reason})=>{
+      const rows=document.querySelectorAll('.jr');
+      if(!rows[idx])return;
+      rows[idx].dataset.score=score;
+      const jt=rows[idx].querySelector('.jt');
+      if(jt){
+        jt.querySelectorAll('.sc-badge').forEach(e=>e.remove());
+        const b=document.createElement('span');
+        b.className='sc-badge';
+        b.title=reason;
+        b.textContent=score+'%';
+        const c=score>=70?'#34a853':score>=50?'#f57c00':'#e94560';
+        const bg=score>=70?'#e6f4ea':score>=50?'#fff3e0':'#fce8e6';
+        b.style.cssText=`display:inline-block;font-size:10px;padding:1px 7px;border-radius:10px;margin-left:6px;font-weight:700;background:${bg};color:${c};cursor:default`;
+        jt.querySelector('a').insertAdjacentElement('afterend',b);
+      }
+    });
+    const fs=document.getElementById('fs');
+    if(fs&&![...fs.options].find(o=>o.value==='score')){
+      const o=document.createElement('option');o.value='score';o.textContent='매칭순';fs.appendChild(o);
+    }
+  }catch(e){alert('네트워크 오류');}
+  finally{btn.disabled=false;btn.textContent='AI 매칭';}
 }
 
 async function saveR(){
@@ -564,6 +604,44 @@ def admin_delete_user(uid):
         return redirect(url_for("admin_page", msg="자신은 삭제할 수 없습니다.", err=1))
     db.delete_user(uid)
     return redirect(url_for("admin_page", msg="삭제 완료"))
+
+
+@app.route("/api/match", methods=["POST"])
+@login_required
+def api_match():
+    key = os.environ.get("DEEPSEEK_API_KEY")
+    if not key:
+        return jsonify({"error": "API key not configured"}), 503
+    data    = request.get_json(force=True) or {}
+    resume  = data.get("resume", "").strip()[:1500]
+    jobs    = data.get("jobs", [])
+    if not resume or not jobs:
+        return jsonify({"error": "resume and jobs required"}), 400
+
+    compressed = [
+        {"idx": i, "title": j.get("title",""), "company": j.get("company",""),
+         "stacks": j.get("stacks",""), "career": j.get("career","")}
+        for i, j in enumerate(jobs)
+    ]
+    prompt = (
+        "다음 이력서를 기반으로 각 공고 매칭율을 분석해주세요.\n\n"
+        f"이력서:\n{resume}\n\n"
+        f"공고 목록:\n{json.dumps(compressed, ensure_ascii=False)}\n\n"
+        "JSON 배열만 반환하세요. 다른 텍스트 없이.\n"
+        '형식: [{"idx":0,"score":85,"reason":"한줄이유"}, ...]'
+    )
+    import requests as req
+    resp = req.post(
+        "https://api.deepseek.com/chat/completions",
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+        json={"model": "deepseek-chat", "messages": [{"role": "user", "content": prompt}], "temperature": 0.3},
+        timeout=60,
+    )
+    content = resp.json()["choices"][0]["message"]["content"].strip()
+    m = re.search(r"\[.*\]", content, re.DOTALL)
+    if m:
+        return jsonify({"scores": json.loads(m.group())})
+    return jsonify({"error": "parse error"}), 500
 
 
 @app.route("/api/resume", methods=["GET", "POST"])
