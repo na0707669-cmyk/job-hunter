@@ -1,4 +1,7 @@
 results.json
+seen.json
 __pycache__/
 *.pyc
 .env
+server.log
+server_err.log
