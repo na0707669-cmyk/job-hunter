@@ -1,5 +1,6 @@
 import os
 import json
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from flask import Flask, request, render_template_string
 from job_hunt import (
@@ -15,6 +16,23 @@ SIZE_SITES = {
     "corp":    ["사람인", "잡코리아"],
     "startup": ["그룹바이"],
 }
+
+CACHE = {}
+CACHE_TTL = 600  # 10분
+
+def _cache_key(q, size):
+    return f"{q}|{size}"
+
+def _get_cache(q, size):
+    key = _cache_key(q, size)
+    if key in CACHE:
+        data, ts = CACHE[key]
+        if time.time() - ts < CACHE_TTL:
+            return data
+    return None
+
+def _set_cache(q, size, data):
+    CACHE[_cache_key(q, size)] = (data, time.time())
 
 SCRAPERS = {
     "자소설닷컴": search_jasoseol,
@@ -355,11 +373,15 @@ def index():
     results, duped, counts, locs = [], 0, {}, []
 
     if q:
-        raw, counts = _run(q, size)
-        deduped  = dedup(raw)
-        results  = mark_new(deduped)
-        duped    = len(raw) - len(deduped)
-        save_seen(results)
+        cached = _get_cache(q, size)
+        if cached:
+            results, duped, counts = cached
+        else:
+            raw, counts = _run(q, size)
+            deduped  = dedup(raw)
+            results  = mark_new(deduped)
+            duped    = len(raw) - len(deduped)
+            _set_cache(q, size, (results, duped, counts))
         locs = sorted({(j.get("location") or "").strip().split()[0]
                        for j in results if j.get("location")} - {""})
 
