@@ -339,10 +339,12 @@ tr:hover td{background:#fafbff}
     <textarea id="rv" placeholder="이력서 내용을 붙여넣으세요 (자격증, 스킬, 경력 등)..."></textarea>
     <div style="display:flex;flex-direction:column;gap:6px">
       <button onclick="saveR()">저장</button>
+      <button id="analyze-btn" onclick="analyzeR()" style="background:#0277bd">이력서 분석</button>
       <button id="match-btn" onclick="matchJobs()" style="background:#7c3aed;display:none">AI 매칭</button>
     </div>
   </div>
-  <div class="mn">이력서는 서버에 저장됩니다. AI 매칭은 현재 검색 결과에 적용됩니다.</div>
+  <div id="analyze-out" style="display:none;margin-top:10px;background:#f8f8ff;border-radius:8px;padding:12px;font-size:13px;line-height:1.7;border:1px solid #e0e0f0"></div>
+  <div class="mn">이력서는 서버에 저장됩니다. AI 매칭은 검색 결과에 적용됩니다.</div>
 </div>
 
 {% if q %}
@@ -608,6 +610,30 @@ function copyDraft(){
   setTimeout(()=>b.textContent='📋 복사',1500);
 }
 
+async function analyzeR(){
+  const resume=document.getElementById('rv')?.value.trim();
+  if(!resume){alert('이력서를 먼저 입력하세요.');return;}
+  const btn=document.getElementById('analyze-btn');
+  btn.disabled=true;btn.textContent='분석 중...';
+  const out=document.getElementById('analyze-out');
+  out.style.display='none';
+  try{
+    const resp=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({resume})});
+    const d=await resp.json();
+    if(d.error){out.innerHTML='<span style="color:#e94560">'+d.error+'</span>';out.style.display='block';return;}
+    // Render keywords as clickable chips
+    let html=d.html||'';
+    out.innerHTML=html;
+    out.style.display='block';
+    // Bind keyword chips to search
+    out.querySelectorAll('.kw-chip').forEach(el=>{
+      el.style.cssText='display:inline-block;padding:3px 10px;background:#e8f0fe;color:#1a73e8;border-radius:12px;margin:2px;cursor:pointer;font-size:12px;font-weight:600';
+      el.onclick=()=>{document.getElementById('qi').value=el.textContent;go();};
+    });
+  }catch{out.innerHTML='<span style="color:#e94560">네트워크 오류</span>';out.style.display='block';}
+  finally{btn.disabled=false;btn.textContent='이력서 분석';}
+}
+
 async function matchJobs(){
   const resume=document.getElementById('rv')?.value.trim();
   if(!resume){alert('이력서를 먼저 입력/저장하세요.');return;}
@@ -787,6 +813,39 @@ def admin_delete_user(uid):
         return redirect(url_for("admin_page", msg="자신은 삭제할 수 없습니다.", err=1))
     db.delete_user(uid)
     return redirect(url_for("admin_page", msg="삭제 완료"))
+
+
+@app.route("/api/analyze", methods=["POST"])
+@login_required
+def api_analyze():
+    key = os.environ.get("DEEPSEEK_API_KEY")
+    if not key:
+        return jsonify({"error": "API key not configured"}), 503
+    resume = (request.get_json(force=True) or {}).get("resume", "").strip()[:2000]
+    if not resume:
+        return jsonify({"error": "이력서를 입력하세요"}), 400
+    prompt = (
+        f"다음 이력서를 분석해주세요.\n\n이력서:\n{resume}\n\n"
+        "아래 형식의 HTML로만 응답하세요. 다른 텍스트 없이.\n\n"
+        "<b>추천 검색 키워드</b><br>"
+        "<span class='kw-chip'>키워드1</span> <span class='kw-chip'>키워드2</span> ...(5~8개)<br><br>"
+        "<b>적합한 직군</b><br>한두 줄 설명<br><br>"
+        "<b>강점</b><br>핵심 강점 2~3가지<br><br>"
+        "<b>보완 포인트</b><br>부족한 스킬이나 경험 1~2가지"
+    )
+    try:
+        resp = _req.post(
+            "https://api.deepseek.com/chat/completions",
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            json={"model": "deepseek-v4-flash", "messages": [{"role": "user", "content": prompt}], "temperature": 0.5},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        html = resp.json()["choices"][0]["message"]["content"].strip()
+        html = re.sub(r"^```html\s*|```$", "", html, flags=re.MULTILINE).strip()
+    except Exception as e:
+        return jsonify({"error": f"DeepSeek 호출 실패: {e}"}), 500
+    return jsonify({"html": html})
 
 
 @app.route("/api/draft", methods=["POST"])
