@@ -707,7 +707,23 @@ async function saveR(){
 window.addEventListener('load',async()=>{
   try{const r=await fetch('/api/bookmarks');const d=await r.json();_bm=d.job_ids||[];}catch{_bm=[];}
   initBM();updBC();
-  try{const r=await fetch('/api/resume');const d=await r.json();if(d.content&&document.getElementById('rv'))document.getElementById('rv').value=d.content;if(d.structured)renderStructured(d.structured);}catch{}
+  try{
+    const r=await fetch('/api/resume');const d=await r.json();
+    if(d.content&&document.getElementById('rv'))document.getElementById('rv').value=d.content;
+    if(d.structured)renderStructured(d.structured);
+    if(d.analysis){
+      const out=document.getElementById('analyze-out');
+      if(out){
+        const ts=d.analyzed_at?`<div style="color:#bbb;font-size:11px;margin-bottom:8px">마지막 분석: ${d.analyzed_at.slice(0,10)}</div>`:'';
+        out.innerHTML=ts+d.analysis;
+        out.style.display='block';
+        out.querySelectorAll('.kw-chip').forEach(el=>{
+          el.style.cssText='display:inline-block;padding:3px 10px;background:#e8f0fe;color:#1a73e8;border-radius:12px;margin:2px;cursor:pointer;font-size:12px;font-weight:600';
+          el.onclick=()=>{document.getElementById('qi').value=el.textContent;go();};
+        });
+      }
+    }
+  }catch{}
   const mp=document.getElementById('mp');
   if(mp)mp.style.display='';
   const matchBtn=document.getElementById('match-btn');
@@ -872,6 +888,7 @@ def api_analyze():
         html = re.sub(r"^```html\s*|```$", "", html, flags=re.MULTILINE).strip()
     except Exception as e:
         return jsonify({"error": f"DeepSeek 호출 실패: {e}"}), 500
+    db.save_analysis(session["user_id"], html)
     return jsonify({"html": html})
 
 
@@ -988,8 +1005,8 @@ def api_resume():
                 pass
         db.save_resume(uid, content, structured if structured else None)
         return jsonify({"ok": True, "structured": structured})
-    content, structured = db.get_resume(uid)
-    return jsonify({"content": content, "structured": structured})
+    content, structured, analysis, analyzed_at = db.get_resume(uid)
+    return jsonify({"content": content, "structured": structured, "analysis": analysis, "analyzed_at": analyzed_at})
 
 
 @app.route("/api/bookmarks", methods=["GET", "POST"])

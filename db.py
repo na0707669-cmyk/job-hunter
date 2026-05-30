@@ -69,11 +69,13 @@ def list_users():
 
 
 def get_resume(user_id):
-    r = _req.get(_url("resumes"), headers=_h(), params={"user_id": f"eq.{user_id}", "select": "content,structured"}, timeout=10)
+    r = _req.get(_url("resumes"), headers=_h(),
+                 params={"user_id": f"eq.{user_id}", "select": "content,structured,analysis,analyzed_at"}, timeout=10)
     data = r.json()
     if isinstance(data, list) and data:
-        return data[0].get("content", ""), data[0].get("structured", {})
-    return "", {}
+        row = data[0]
+        return row.get("content", ""), row.get("structured", {}), row.get("analysis", ""), row.get("analyzed_at", "")
+    return "", {}, "", ""
 
 
 def save_resume(user_id, content, structured=None):
@@ -82,6 +84,11 @@ def save_resume(user_id, content, structured=None):
         payload["structured"] = structured
     _req.patch(_url("resumes"), headers=_h(), params={"user_id": f"eq.{user_id}"},
                json=payload, timeout=10)
+
+
+def save_analysis(user_id, analysis):
+    _req.patch(_url("resumes"), headers=_h(), params={"user_id": f"eq.{user_id}"},
+               json={"analysis": analysis, "analyzed_at": datetime.utcnow().isoformat()}, timeout=10)
 
 
 def get_bookmarks(user_id):
