@@ -37,6 +37,18 @@ HEADERS = {
 }
 
 
+def _normalize_career(txt):
+    if not txt:
+        return ""
+    if "무관" in txt or "관계없음" in txt or ("신입" in txt and "경력" in txt):
+        return "무관"
+    if "신입" in txt:
+        return "신입"
+    if "경력" in txt:
+        return "경력"
+    return ""
+
+
 def _parse_dday(deadline_str):
     if not deadline_str:
         return None
@@ -72,6 +84,12 @@ def search_saramin(keyword):
         loc_el = item.select_one(".job_condition span")
         if loc_el:
             location = loc_el.get_text(strip=True)
+        career = ""
+        for span in item.select(".job_condition span"):
+            txt = span.get_text(strip=True)
+            if re.search(r"신입|경력|무관|관계없음", txt) and len(txt) < 25:
+                career = _normalize_career(txt)
+                break
         jobs.append({
             "site": "사람인",
             "size": "대기업·중소",
@@ -81,6 +99,7 @@ def search_saramin(keyword):
             "deadline": deadline,
             "dday": _parse_dday(deadline),
             "location": location,
+            "career": career,
         })
     return jobs
 
@@ -107,6 +126,11 @@ def search_jobkorea(keyword):
             if any(c in p for c in ["서울", "경기", "부산", "인천", "대구", "대전", "광주", "울산"]):
                 location = p.split()[0]
                 break
+        career = ""
+        for p in parts:
+            if re.search(r"신입|경력|무관|관계없음", p) and len(p) < 20:
+                career = _normalize_career(p)
+                break
         jobs.append({
             "site": "잡코리아",
             "size": "중견·중소",
@@ -116,6 +140,7 @@ def search_jobkorea(keyword):
             "deadline": deadline,
             "dday": None,
             "location": location,
+            "career": career,
         })
     return jobs
 
@@ -143,6 +168,13 @@ def search_jasoseol(keyword):
                     deadline = m.group(1)
                     dday = _parse_dday(deadline)
             href = a.get_attribute("href") or ""
+            career = ""
+            try:
+                career_el = a.query_selector('[class*="career"]') or a.query_selector('[class*="type"]')
+                if career_el:
+                    career = _normalize_career(career_el.inner_text().strip())
+            except Exception:
+                pass
             jobs.append({
                 "site": "자소설닷컴",
                 "size": "대기업",
@@ -152,6 +184,7 @@ def search_jasoseol(keyword):
                 "deadline": deadline,
                 "dday": dday,
                 "location": "서울",
+                "career": career,
             })
     page.close()
     return jobs
@@ -187,7 +220,7 @@ def search_groupby(keyword):
             "title": p.get("name", ""),
             "link": f"https://groupby.kr/positions/{p['id']}",
             "stacks": ", ".join(p.get("techStacks", [])[:5]),
-            "career": p.get("careerType", ""),
+            "career": _normalize_career(p.get("careerType", "")),
             "location": startup.get("location", ""),
             "deadline": "",
             "dday": None,

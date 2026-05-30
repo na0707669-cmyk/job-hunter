@@ -172,6 +172,13 @@ tr:hover td{background:#fafbff}
     <option value="">전체</option>
     {% for loc in locations %}<option value="{{ loc }}">{{ loc }}</option>{% endfor %}
   </select>
+  <label style="margin-left:8px">경력</label>
+  <select id="fc" onchange="filt()">
+    <option value="">전체</option>
+    <option value="신입">신입</option>
+    <option value="경력">경력</option>
+    <option value="무관">무관</option>
+  </select>
   <label style="margin-left:8px">정렬</label>
   <select id="fs" onchange="filt()">
     <option value="">기본순</option>
@@ -207,7 +214,8 @@ tr:hover td{background:#fafbff}
       data-dday="{{ j.dday if j.dday is not none else 9999 }}"
       data-loc="{{ j.location }}"
       data-id="{{ j.company }}|{{ j.title }}"
-      data-isnew="{{ 'y' if j.is_new else 'n' }}">
+      data-isnew="{{ 'y' if j.is_new else 'n' }}"
+      data-career="{{ j.get('career','') }}">
     <td style="color:#ccc">{{ loop.index }}</td>
     <td>
       <span class="sb sb-{{ j.site }}">{{ j.site }}</span><br>
@@ -298,15 +306,17 @@ function switchTab(t){
 function filt(){
   const dd=parseInt(document.getElementById('fd')?.value)||0;
   const loc=document.getElementById('fl')?.value||'';
+  const car=document.getElementById('fc')?.value||'';
   const sort=document.getElementById('fs')?.value||'';
   const bmOnly=document.getElementById('fb')?.checked;
   const b=gb();
   const rows=Array.from(document.querySelectorAll('.jr'));
   rows.forEach(r=>{
-    const rd=parseInt(r.dataset.dday),rl=r.dataset.loc||'',ri=r.dataset.id;
+    const rd=parseInt(r.dataset.dday),rl=r.dataset.loc||'',ri=r.dataset.id,rc=r.dataset.career||'';
     let show=true;
     if(dd&&(isNaN(rd)||rd>dd||rd<0))show=false;
     if(loc&&!rl.includes(loc))show=false;
+    if(car&&rc!==car)show=false;
     if(bmOnly&&!b.includes(ri))show=false;
     r.style.display=show?'':'none';
   });
@@ -319,7 +329,7 @@ function filt(){
   let n=1;rows.forEach(r=>{if(r.style.display!=='none')r.cells[0].textContent=n++});
 }
 function clrF(){
-  ['fd','fl','fs'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=''});
+  ['fd','fl','fc','fs'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=''});
   document.getElementById('fb').checked=false;
   filt();
 }
