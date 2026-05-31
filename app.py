@@ -2,6 +2,7 @@ import os
 import re
 import time
 import json
+import secrets
 import functools
 import requests as _req
 from bs4 import BeautifulSoup as _BS
@@ -14,6 +15,20 @@ from job_hunt import (
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
+
+
+def _csrf_token():
+    if "csrf_token" not in session:
+        session["csrf_token"] = secrets.token_hex(32)
+    return session["csrf_token"]
+
+
+def _csrf_validate():
+    token = request.form.get("csrf_token", "")
+    return secrets.compare_digest(token, session.get("csrf_token", ""))
+
+
+app.jinja_env.globals["csrf_token"] = _csrf_token
 
 _db_enabled = bool(os.environ.get("SUPABASE_URL"))
 if _db_enabled:
@@ -112,6 +127,7 @@ LOGIN_HTML = """<!doctype html>
   <h1>🎯 공고 사냥</h1>
   {% if error %}<div class="err">{{ error }}</div>{% endif %}
   <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="text" name="username" placeholder="아이디" required autofocus>
     <input type="password" name="password" placeholder="비밀번호" required>
     <button type="submit">로그인</button>
@@ -131,6 +147,7 @@ REGISTER_HTML = """<!doctype html>
   {% if error %}<div class="err">{{ error }}</div>{% endif %}
   {% if ok %}<div class="ok">{{ ok }}</div>{% endif %}
   <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="text" name="username" placeholder="아이디 (영문/숫자)" required autofocus>
     <input type="password" name="password" placeholder="비밀번호" required>
     <input type="password" name="password2" placeholder="비밀번호 확인" required>
@@ -183,6 +200,7 @@ tr:last-child td{border-bottom:none}
       <td>
         {% if not u.is_admin %}
         <form method="post" action="/admin/users/{{ u.id }}/delete" style="display:inline" onsubmit="return confirm('{{ u.username }} 삭제?')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button class="del">삭제</button>
         </form>
         {% endif %}
@@ -193,6 +211,7 @@ tr:last-child td{border-bottom:none}
   <h2>유저 추가</h2>
   {% if msg %}<div class="{{ 'merr' if msg_err else 'msg' }}">{{ msg }}</div>{% endif %}
   <form method="post" action="/admin/users" class="add-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="text" name="username" placeholder="아이디" required>
     <input type="password" name="password" placeholder="비밀번호" required>
     <label><input type="checkbox" name="is_admin"> 관리자</label>
@@ -763,6 +782,8 @@ def login_page():
         return redirect(url_for("index"))
     error = None
     if request.method == "POST":
+        if not _csrf_validate():
+            return "잘못된 요청입니다.", 403
         try:
             user = db.check_password(request.form["username"], request.form["password"])
             if user:
@@ -797,6 +818,8 @@ def register():
         return redirect(url_for("index"))
     error = ok = None
     if request.method == "POST":
+        if not _csrf_validate():
+            return "잘못된 요청입니다.", 403
         username  = request.form.get("username","").strip()
         password  = request.form.get("password","")
         password2 = request.form.get("password2","")
@@ -835,6 +858,8 @@ def admin_page():
 @login_required
 @admin_required
 def admin_add_user():
+    if not _csrf_validate():
+        return "잘못된 요청입니다.", 403
     username = request.form.get("username", "").strip()
     password = request.form.get("password", "").strip()
     is_admin = bool(request.form.get("is_admin"))
@@ -851,6 +876,8 @@ def admin_add_user():
 @login_required
 @admin_required
 def admin_delete_user(uid):
+    if not _csrf_validate():
+        return "잘못된 요청입니다.", 403
     if uid == session.get("user_id"):
         return redirect(url_for("admin_page", msg="자신은 삭제할 수 없습니다.", err=1))
     db.delete_user(uid)
