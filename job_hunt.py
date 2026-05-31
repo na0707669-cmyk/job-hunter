@@ -53,8 +53,9 @@ def _parse_dday(deadline_str):
     return None
 
 
-def get(url):
-    return requests.get(url, headers=HEADERS, timeout=10)
+def get(url, headers=None):
+    h = {**HEADERS, **(headers or {})}
+    return requests.get(url, headers=h, timeout=10)
 
 
 def search_saramin(keyword):
@@ -192,25 +193,13 @@ def search_jasoseol(keyword):
 
 
 def search_groupby(keyword):
-    keyword_map = {
-        "백엔드": "engineering", "프론트": "engineering",
-        "풀스택": "engineering", "개발": "engineering",
-        "AI": "ai", "인공지능": "ai",
-        "마케팅": "marketing", "디자인": "design",
-        "iOS": "ios", "안드로이드": "android",
-    }
-    path = "engineering"
-    for k, v in keyword_map.items():
-        if k in keyword:
-            path = v
-            break
-
-    soup = BeautifulSoup(get(f"https://groupby.kr/jobs/{path}").text, "html.parser")
-    nd = soup.find("script", id="__NEXT_DATA__")
-    if not nd:
-        return []
-
-    positions = json.loads(nd.string).get("props", {}).get("pageProps", {}).get("positions", [])
+    resp = get(
+        f"https://api.groupby.kr/startup-positions/search"
+        f"?searchQuery={quote(keyword)}&limit=30&offset=0",
+        headers={"Accept": "application/json"},
+    )
+    data = resp.json().get("data", {})
+    positions = data.get("items", []) if isinstance(data, dict) else []
     jobs = []
     for p in positions:
         startup = p.get("startup", {})
@@ -222,7 +211,7 @@ def search_groupby(keyword):
             "link": f"https://groupby.kr/positions/{p['id']}",
             "stacks": ", ".join(p.get("techStacks", [])[:5]),
             "career": _normalize_career(p.get("careerType", "")),
-            "location": startup.get("location", ""),
+            "location": (startup.get("location") or "").split()[0] if startup.get("location") else "",
             "deadline": "",
             "dday": None,
             "funding": startup.get("fundingRound", ""),
