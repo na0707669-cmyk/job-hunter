@@ -11,21 +11,6 @@ from playwright.sync_api import sync_playwright
 sys.stdin.reconfigure(encoding="utf-8")
 sys.stdout.reconfigure(encoding="utf-8")
 
-_pw_browser = None
-
-
-def _get_browser():
-    global _pw_browser
-    if _pw_browser is None:
-        _pw = sync_playwright().start()
-        _pw_browser = _pw.chromium.launch(headless=True)
-    return _pw_browser
-
-
-def _pw_page(url, wait="networkidle", timeout=20000):
-    page = _get_browser().new_page()
-    page.goto(url, wait_until=wait, timeout=timeout)
-    return page
 
 
 HEADERS = {
@@ -153,47 +138,56 @@ def search_jobkorea(keyword):
 
 
 def search_jasoseol(keyword):
-    page = _pw_page(f"https://jasoseol.com/recruit?searchQuery={quote(keyword)}")
-    groups = page.query_selector_all('[class*="employment-group-title"]')
     jobs = []
-    for group in groups:
-        company_el = group.query_selector("span.company-name")
-        company = company_el.inner_text().strip() if company_el else ""
-        parent = group.query_selector("xpath=..")
-        if not parent:
-            continue
-        for a in parent.query_selector_all('a[href*="/recruit/"]'):
-            title_el = a.query_selector('[class*="employment-title"]')
-            period_el = a.query_selector('[class*="employment-period"]')
-            if not title_el:
-                continue
-            deadline = ""
-            dday = None
-            if period_el:
-                m = re.search(r"(\d{4}\.\d{2}\.\d{2})", period_el.inner_text())
-                if m:
-                    deadline = m.group(1)
-                    dday = _parse_dday(deadline)
-            href = a.get_attribute("href") or ""
-            career = ""
-            try:
-                career_el = a.query_selector('[class*="career"]') or a.query_selector('[class*="type"]')
-                if career_el:
-                    career = _normalize_career(career_el.inner_text().strip())
-            except Exception:
-                pass
-            jobs.append({
-                "site": "자소설닷컴",
-                "size": "대기업",
-                "company": company,
-                "title": title_el.inner_text().strip(),
-                "link": "https://jasoseol.com" + href,
-                "deadline": deadline,
-                "dday": dday,
-                "location": "서울",
-                "career": career,
-            })
-    page.close()
+    with sync_playwright() as _pw:
+        browser = _pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.goto(
+                f"https://jasoseol.com/recruit?searchQuery={quote(keyword)}",
+                wait_until="networkidle",
+                timeout=20000,
+            )
+            groups = page.query_selector_all('[class*="employment-group-title"]')
+            for group in groups:
+                company_el = group.query_selector("span.company-name")
+                company = company_el.inner_text().strip() if company_el else ""
+                parent = group.query_selector("xpath=..")
+                if not parent:
+                    continue
+                for a in parent.query_selector_all('a[href*="/recruit/"]'):
+                    title_el = a.query_selector('[class*="employment-title"]')
+                    period_el = a.query_selector('[class*="employment-period"]')
+                    if not title_el:
+                        continue
+                    deadline = ""
+                    dday = None
+                    if period_el:
+                        m = re.search(r"(\d{4}\.\d{2}\.\d{2})", period_el.inner_text())
+                        if m:
+                            deadline = m.group(1)
+                            dday = _parse_dday(deadline)
+                    href = a.get_attribute("href") or ""
+                    career = ""
+                    try:
+                        career_el = a.query_selector('[class*="career"]') or a.query_selector('[class*="type"]')
+                        if career_el:
+                            career = _normalize_career(career_el.inner_text().strip())
+                    except Exception:
+                        pass
+                    jobs.append({
+                        "site": "자소설닷컴",
+                        "size": "대기업",
+                        "company": company,
+                        "title": title_el.inner_text().strip(),
+                        "link": "https://jasoseol.com" + href,
+                        "deadline": deadline,
+                        "dday": dday,
+                        "location": "서울",
+                        "career": career,
+                    })
+        finally:
+            browser.close()
     return jobs
 
 
