@@ -240,6 +240,33 @@ def dedup(jobs):
     return result
 
 
+def search_wanted(keyword):
+    resp = get(
+        f"https://www.wanted.co.kr/api/v4/jobs"
+        f"?country=kr&job_sort=job.latest_order&years=-1&locations=all&limit=30"
+        f"&keywords={quote(keyword)}",
+        headers={"Referer": "https://www.wanted.co.kr", "Accept": "application/json"},
+    )
+    items = resp.json().get("data", [])
+    jobs = []
+    for item in items:
+        due = item.get("due_time")
+        deadline = due[:10].replace("-", ".") if due else ""
+        jobs.append({
+            "site": "원티드",
+            "size": "스타트업",
+            "company": item.get("company", {}).get("name", ""),
+            "title": item.get("position", ""),
+            "link": f"https://www.wanted.co.kr/wd/{item['id']}",
+            "deadline": deadline,
+            "dday": _parse_dday(deadline),
+            "location": item.get("address", {}).get("location", ""),
+            "career": "",
+            "stacks": "",
+        })
+    return jobs
+
+
 def load_seen():
     try:
         with open("seen.json", "r", encoding="utf-8") as f:

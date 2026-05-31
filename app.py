@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from flask import Flask, request, render_template_string, redirect, url_for, session, jsonify
 from job_hunt import (
     search_saramin, search_jobkorea, search_groupby, search_jasoseol,
+    search_wanted,
     dedup, mark_new, save_seen,
 )
 
@@ -39,10 +40,10 @@ if _db_enabled:
         print(f"[WARN] DB init failed: {e} — running without DB")
 
 SIZE_SITES = {
-    "all":     ["자소설닷컴", "사람인", "잡코리아", "그룹바이"],
+    "all":     ["자소설닷컴", "사람인", "잡코리아", "그룹바이", "원티드"],
     "big":     ["자소설닷컴"],
     "corp":    ["사람인", "잡코리아"],
-    "startup": ["그룹바이"],
+    "startup": ["그룹바이", "원티드"],
 }
 
 CACHE = {}
@@ -66,6 +67,7 @@ SCRAPERS = {
     "사람인":     search_saramin,
     "잡코리아":   search_jobkorea,
     "그룹바이":   search_groupby,
+    "원티드":     search_wanted,
 }
 
 
@@ -261,6 +263,7 @@ body{font-family:-apple-system,'Noto Sans KR',sans-serif;background:#f0f2f5;colo
 .stag-사람인{border-color:#1a73e8;color:#1a73e8;background:#e8f0fe}
 .stag-잡코리아{border-color:#ea4335;color:#ea4335;background:#fce8e6}
 .stag-그룹바이{border-color:#34a853;color:#34a853;background:#e6f4ea}
+.stag-원티드{border-color:#36f;color:#36f;background:#eef}
 
 .tabs{display:flex;padding:8px 24px 0}
 .tab{padding:8px 16px;font-size:13px;cursor:pointer;border-bottom:2px solid transparent;color:#888}
