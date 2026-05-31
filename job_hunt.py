@@ -231,13 +231,22 @@ def search_groupby(keyword):
 
 
 def dedup(jobs):
-    seen = set()
+    seen_links = set()
+    seen_cross_site = set()
     result = []
     for j in jobs:
-        key = (j["company"].strip().lower(), j["title"].strip().lower())
-        if key not in seen:
-            seen.add(key)
-            result.append(j)
+        link = j.get("link", "").strip()
+        cross_key = (j["company"].strip().lower(), j["title"].strip().lower(), j.get("site", ""))
+        # 같은 링크 = 완전 중복
+        if link and link in seen_links:
+            continue
+        # 같은 사이트에서 동일 회사+직책 = 중복 (다른 사이트는 허용)
+        if cross_key in seen_cross_site:
+            continue
+        if link:
+            seen_links.add(link)
+        seen_cross_site.add(cross_key)
+        result.append(j)
     return result
 
 
