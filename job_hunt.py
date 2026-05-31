@@ -52,6 +52,13 @@ def _normalize_career(txt):
 def _parse_dday(deadline_str):
     if not deadline_str:
         return None
+    # "D-5", "D-0" 형식 직접 파싱
+    m = re.match(r"D-(\d+)$", deadline_str.strip())
+    if m:
+        return int(m.group(1))
+    # "즉시" = 당일 마감으로 처리
+    if "즉시" in deadline_str:
+        return 0
     for fmt in ("%Y.%m.%d", "%Y/%m/%d"):
         try:
             dt = datetime.strptime(deadline_str[:10], fmt)
@@ -138,7 +145,7 @@ def search_jobkorea(keyword):
             "title": a_tags[0].get_text(strip=True),
             "link": a_tags[0].get("href", ""),
             "deadline": deadline,
-            "dday": None,
+            "dday": _parse_dday(deadline),
             "location": location,
             "career": career,
         })
