@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c *)",
+      "Bash(python *.py*)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git push*)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git fetch*)",
+      "Bash(git pull*)",
+      "Bash(pip install*)",
+      "Bash(pip install -q*)",
+      "Bash(curl -s *)",
+      "Bash(curl *saramin*)",
+      "Bash(curl *wanted*)",
+      "Bash(curl *groupby*)",
+      "Bash(mkdir *)",
+      "Bash(cd * && python -c *)",
+      "Bash(cd * && python *.py*)"
+    ]
+  }
+}
