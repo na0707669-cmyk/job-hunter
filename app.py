@@ -7,7 +7,9 @@ import functools
 import requests as _req
 from bs4 import BeautifulSoup as _BS
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from flask import Flask, request, render_template, redirect, url_for, session, jsonify
+import csv
+import io
+from flask import Flask, request, render_template, redirect, url_for, session, jsonify, Response
 from job_hunt import (
     search_saramin, search_jobkorea, search_groupby, search_jasoseol,
     search_wanted,
@@ -478,6 +480,37 @@ def api_bookmarks():
         db.save_bookmarks(uid, job_ids)
         return jsonify({"ok": True})
     return jsonify({"job_ids": db.get_bookmarks(uid)})
+
+
+@app.route("/export.csv")
+@login_required
+def export_csv():
+    q           = request.args.get("q", "").strip()
+    sites_param = request.args.get("sites", "")
+    also_param  = request.args.get("also", "")
+    active_sites = [s for s in sites_param.split(",") if s in SCRAPERS] if sites_param else ALL_SITES
+    also_terms   = [t.strip() for t in also_param.split(",") if t.strip()] if also_param else []
+
+    all_raw = []
+    for kw in ([q] + also_terms if q else []):
+        cached = _get_cache(kw, active_sites)
+        raw, _ = cached if cached else _run(kw, active_sites)
+        all_raw.extend(raw)
+
+    results = mark_new(dedup(all_raw))
+
+    fields = ["site", "company", "title", "career", "location", "deadline", "dday", "stacks", "link"]
+    buf = io.StringIO()
+    w = csv.DictWriter(buf, fieldnames=fields, extrasaction="ignore")
+    w.writeheader()
+    w.writerows(results)
+
+    filename = f"jobs_{q or 'all'}.csv"
+    return Response(
+        "﻿" + buf.getvalue(),  # BOM for Excel UTF-8
+        mimetype="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @app.route("/")

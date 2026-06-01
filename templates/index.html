@@ -64,10 +64,13 @@
   <b>{{ q }}{% if also_terms %} + {{ also_terms|join(' + ') }}{% endif %}</b>
   · {{ size_label }} · 총 <b>{{ results|length }}개</b>
   {% if duped %}<span style="color:#bbb">(중복 {{ duped }}개 제거)</span>{% endif %}
-  <span style="display:flex;gap:6px;flex-wrap:wrap">
+  <span style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
     {% for site, cnt in site_counts.items() %}
     <span class="stag stag-{{ site }}">{{ site }} {{ cnt }}</span>
     {% endfor %}
+    <a href="/export.csv?q={{ q }}&sites={{ request.args.get('sites','') }}&also={{ request.args.get('also','') }}"
+       style="margin-left:8px;font-size:12px;color:#888;text-decoration:none;border:1px solid #ddd;padding:2px 8px;border-radius:4px;white-space:nowrap"
+       title="현재 결과 CSV 다운로드">⬇ CSV</a>
   </span>
 </div>
 
