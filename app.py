@@ -51,6 +51,94 @@ SCRAPERS = {
 }
 ALL_SITES = list(SCRAPERS.keys())
 
+# ── 유사어 클러스터 ──────────────────────────────────────────────
+_SYNONYM_GROUPS = [
+    # 상품/MD
+    {"MD", "머천다이저", "상품기획자", "상품기획", "바이어"},
+    # 기획
+    {"PM", "PO", "프로덕트매니저", "프로덕트오너", "서비스기획자"},
+    {"사업기획", "전략기획", "경영기획", "비즈니스기획"},
+    # 개발 - 백엔드
+    {"백엔드", "백엔드개발자", "서버개발자", "서버"},
+    # 개발 - 프론트엔드
+    {"프론트엔드", "프론트엔드개발자", "프론트", "웹프론트엔드"},
+    # 개발 - 풀스택
+    {"풀스택", "풀스택개발자"},
+    # 개발 - 모바일
+    {"iOS", "iOS개발자", "아이폰개발자", "Swift"},
+    {"안드로이드", "안드로이드개발자", "Android"},
+    {"모바일개발자", "앱개발자", "크로스플랫폼개발자"},
+    # 개발 - 인프라
+    {"DevOps", "데브옵스", "SRE", "인프라엔지니어", "클라우드엔지니어"},
+    # 개발 - 보안
+    {"정보보안", "보안엔지니어", "보안담당자", "사이버보안"},
+    # 개발 - QA
+    {"QA", "QA엔지니어", "품질보증", "테스터", "QE"},
+    # 개발 - 퍼블리셔
+    {"퍼블리셔", "웹퍼블리셔", "마크업개발자", "UI개발자"},
+    # 데이터
+    {"데이터분석가", "DA", "데이터애널리스트", "분석가"},
+    {"데이터엔지니어", "DE", "데이터파이프라인"},
+    {"데이터사이언티스트", "DS", "머신러닝엔지니어", "ML엔지니어"},
+    {"AI엔지니어", "AI개발자", "딥러닝엔지니어", "LLM엔지니어"},
+    # 디자인
+    {"UX디자이너", "UI디자이너", "UXUI디자이너", "프로덕트디자이너"},
+    {"브랜드디자이너", "BX디자이너", "브랜딩디자이너"},
+    {"그래픽디자이너", "그래픽디자인"},
+    {"영상편집자", "영상편집", "영상디자이너"},
+    {"모션그래픽", "모션디자이너"},
+    # 마케팅
+    {"퍼포먼스마케터", "퍼포먼스마케팅", "그로스마케터", "디지털마케터"},
+    {"콘텐츠마케터", "콘텐츠마케팅", "SNS마케터"},
+    {"브랜드마케터", "브랜드마케팅"},
+    {"CRM마케터", "CRM마케팅", "이메일마케팅"},
+    {"마케터", "마케팅담당자"},
+    # HR
+    {"HR", "인사담당자", "HRM", "HRD", "인사관리"},
+    {"채용담당자", "채용", "리크루터", "Recruiter"},
+    # 영업
+    {"영업", "세일즈", "영업담당자"},
+    {"B2B영업", "기업영업", "법인영업"},
+    {"기술영업", "솔루션영업", "세일즈엔지니어"},
+    # CS/고객
+    {"CS", "고객서비스", "고객지원", "CX", "고객경험"},
+    # 재무/회계
+    {"재무", "재무관리", "재무담당자", "재무기획"},
+    {"회계", "회계담당자", "경리", "세무"},
+    {"IR", "투자유치", "투자관계"},
+    # 물류/SCM
+    {"물류", "SCM", "공급망관리", "물류기획"},
+    # 법무
+    {"법무", "법무담당자", "계약관리", "컴플라이언스"},
+    # 총무/지원
+    {"총무", "경영지원", "어드민"},
+    # 구매
+    {"구매", "구매담당자", "소싱"},
+    # 콘텐츠
+    {"작가", "콘텐츠작가", "카피라이터", "에디터"},
+    {"PD", "영상PD", "콘텐츠PD"},
+    # 게임
+    {"게임개발자", "게임클라이언트", "게임서버개발자"},
+    # 임원
+    {"CTO", "기술이사"}, {"CFO", "재무이사"}, {"CMO", "마케팅이사"},
+]
+
+def _build_synonym_lookup(groups):
+    lookup = {}
+    for group in groups:
+        lst = sorted(group)
+        for term in group:
+            others = [t for t in lst if t != term]
+            if others:
+                lookup[term.lower()] = others
+    return lookup
+
+SYNONYM_LOOKUP = _build_synonym_lookup(_SYNONYM_GROUPS)
+
+def get_synonyms(keyword):
+    return SYNONYM_LOOKUP.get(keyword.strip().lower(), [])
+
+# ── 캐시 ────────────────────────────────────────────────────────
 def _cache_key(q, sites): return f"{q}|{','.join(sorted(sites))}"
 
 def _get_cache(q, sites):
@@ -241,6 +329,12 @@ body{font-family:-apple-system,'Noto Sans KR',sans-serif;background:#f0f2f5;colo
 .site-lbl input{cursor:pointer;accent-color:#e94560}
 .site-lbl:hover{color:#fff}
 .slow-badge{font-size:10px;padding:1px 6px;background:#7c3aed;color:#fff;border-radius:8px;margin-left:2px}
+.syn-bar{padding:7px 24px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:#fff;border-bottom:1px solid #eee;font-size:12px}
+.syn-label{color:#999;white-space:nowrap;margin-right:2px}
+.syn-active{display:inline-flex;align-items:center;gap:3px;padding:3px 9px;background:#1a1a2e;color:#fff;border-radius:12px;cursor:pointer;font-weight:600}
+.syn-active:hover{background:#e94560}
+.syn-chip{display:inline-block;padding:3px 9px;background:#f3f3f3;color:#555;border-radius:12px;cursor:pointer;border:1px dashed #ccc}
+.syn-chip:hover{background:#e8f0fe;border-color:#1a73e8;color:#1a73e8}
 .uinfo a:hover{color:#fff}
 
 #hist{position:absolute;top:38px;left:0;width:260px;background:#fff;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.15);z-index:100;display:none;overflow:hidden}
@@ -379,7 +473,7 @@ tr:hover td{background:#fafbff}
 
 {% if q %}
 <div class="meta">
-  <b>{{ q }}</b> · {{ size_label }} · 총 <b>{{ results|length }}개</b>
+  <b>{{ q }}{% if also_terms %} + {{ also_terms|join(' + ') }}{% endif %}</b> · {{ size_label }} · 총 <b>{{ results|length }}개</b>
   {% if duped %}<span style="color:#bbb">(중복 {{ duped }}개 제거)</span>{% endif %}
   <span style="display:flex;gap:6px;flex-wrap:wrap">
     {% for site,cnt in site_counts.items() %}
@@ -387,6 +481,17 @@ tr:hover td{background:#fafbff}
     {% endfor %}
   </span>
 </div>
+{% if also_terms or suggestions %}
+<div class="syn-bar">
+  <span class="syn-label">관련 직무</span>
+  {% for t in also_terms %}
+  <span class="syn-active" onclick="removeAlso('{{ t }}')">{{ t }} ✕</span>
+  {% endfor %}
+  {% for s in suggestions %}
+  <span class="syn-chip" onclick="addAlso('{{ s }}')">+ {{ s }}</span>
+  {% endfor %}
+</div>
+{% endif %}
 
 <div class="filter-bar">
   <label>마감</label>
@@ -534,6 +639,20 @@ function go(){
   addH(q);
   const sites=[...document.querySelectorAll('.site-cb:checked')].map(c=>c.value).join(',');
   window.location.href=`/?q=${encodeURIComponent(q)}&size=${document.getElementById('sz').value}&sites=${encodeURIComponent(sites)}`;
+}
+function addAlso(term){
+  const u=new URL(window.location.href);
+  const a=(u.searchParams.get('also')||'').split(',').filter(t=>t);
+  if(!a.includes(term))a.push(term);
+  u.searchParams.set('also',a.join(','));
+  window.location.href=u.toString();
+}
+function removeAlso(term){
+  const u=new URL(window.location.href);
+  const a=(u.searchParams.get('also')||'').split(',').filter(t=>t&&t!==term);
+  if(a.length>0)u.searchParams.set('also',a.join(','));
+  else u.searchParams.delete('also');
+  window.location.href=u.toString();
 }
 document.getElementById('qi').addEventListener('keydown',e=>{if(e.key==='Enter')go()});
 
@@ -1071,16 +1190,31 @@ def index():
         if _db_enabled else None
     )
 
+    also_param = request.args.get("also", "")
+    also_terms = [t.strip() for t in also_param.split(",") if t.strip()] if also_param else []
+    suggestions = [s for s in get_synonyms(q) if s.lower() not in {a.lower() for a in also_terms}] if q else []
+
     if q:
-        cached = _get_cache(q, active_sites)
-        if cached:
-            results, duped, counts = cached
-        else:
-            raw, counts = _run(q, active_sites)
-            deduped = dedup(raw)
-            results = mark_new(deduped)
-            duped   = len(raw) - len(deduped)
-            _set_cache(q, active_sites, (results, duped, counts))
+        keywords = [q] + also_terms
+
+        def fetch_kw(kw):
+            cached = _get_cache(kw, active_sites)
+            if cached:
+                return cached  # (raw, counts)
+            raw, cnts = _run(kw, active_sites)
+            _set_cache(kw, active_sites, (raw, cnts))
+            return raw, cnts
+
+        all_raw, counts = [], {}
+        with ThreadPoolExecutor(max_workers=len(keywords)) as ex:
+            for raw, cnts in ex.map(fetch_kw, keywords):
+                all_raw.extend(raw)
+                for site, cnt in cnts.items():
+                    counts[site] = counts.get(site, 0) + cnt
+
+        deduped = dedup(all_raw)
+        results = mark_new(deduped)
+        duped   = len(all_raw) - len(deduped)
         locs = sorted({(j.get("location") or "").strip().split()[0]
                        for j in results if j.get("location")} - {""})
 
@@ -1089,6 +1223,7 @@ def index():
         results=results, duped=duped, site_counts=counts, locations=locs,
         current_user=current_user,
         all_sites=ALL_SITES, active_sites=active_sites,
+        also_terms=also_terms, suggestions=suggestions,
     )
 
 
