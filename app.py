@@ -501,6 +501,21 @@ def api_bookmarks():
     return jsonify({"job_ids": db.get_bookmarks(uid)})
 
 
+@app.route("/api/drafts", methods=["GET", "POST"])
+@login_required
+def api_drafts():
+    uid = session["user_id"]
+    if request.method == "POST":
+        data = request.get_json(force=True) or {}
+        job_id     = data.get("job_id", "").strip()
+        draft_text = data.get("draft", "").strip()
+        if not job_id:
+            return jsonify({"error": "job_id required"}), 400
+        db.save_draft(uid, job_id, draft_text)
+        return jsonify({"ok": True})
+    return jsonify({"drafts": db.get_drafts(uid)})
+
+
 @app.route("/export.csv")
 @login_required
 def export_csv():

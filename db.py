@@ -100,3 +100,23 @@ def get_bookmarks(user_id):
 def save_bookmarks(user_id, job_ids):
     _req.patch(_url("bookmarks"), headers=_h(), params={"user_id": f"eq.{user_id}"},
                json={"job_ids": job_ids, "updated_at": datetime.utcnow().isoformat()}, timeout=10)
+
+
+def get_drafts(user_id):
+    """저장된 자소서 초안 dict 반환 { "company|title": "draft_text", ... }"""
+    r = _req.get(_url("bookmarks"), headers=_h(), params={"user_id": f"eq.{user_id}", "select": "drafts"}, timeout=10)
+    data = r.json()
+    if isinstance(data, list) and data:
+        return data[0].get("drafts") or {}
+    return {}
+
+
+def save_draft(user_id, job_id, draft_text):
+    """특정 공고의 자소서 초안 저장 (기존 초안과 머지)"""
+    current = get_drafts(user_id)
+    if draft_text:
+        current[job_id] = draft_text
+    else:
+        current.pop(job_id, None)
+    _req.patch(_url("bookmarks"), headers=_h(), params={"user_id": f"eq.{user_id}"},
+               json={"drafts": current, "updated_at": datetime.utcnow().isoformat()}, timeout=10)

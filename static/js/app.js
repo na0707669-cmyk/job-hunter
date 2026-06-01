@@ -53,6 +53,36 @@ function removeAlso(term) {
 // ── Bookmarks ────────────────────────────────────────────────────
 let _bm = [];
 const gb = () => _bm;
+
+// ── Saved drafts ─────────────────────────────────────────────────
+let _drafts = {};   // { "company|title": "draft text" }
+async function loadDrafts() {
+  try { const r = await fetch('/api/drafts'); const d = await r.json(); _drafts = d.drafts || {}; } catch { _drafts = {}; }
+  markDraftRows();
+}
+async function saveDraftToServer(jobId, text) {
+  try {
+    await fetch('/api/drafts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ job_id: jobId, draft: text }) });
+    _drafts[jobId] = text;
+    markDraftRows();
+  } catch { alert('저장 실패'); }
+}
+function markDraftRows() {
+  document.querySelectorAll('.jr').forEach(r => {
+    const hasDraft = !!_drafts[r.dataset.id];
+    let badge = r.querySelector('.draft-badge');
+    if (hasDraft && !badge) {
+      badge = document.createElement('span');
+      badge.className = 'draft-badge';
+      badge.title = '저장된 자소서 초안 있음';
+      badge.textContent = '📝';
+      badge.style.cssText = 'margin-left:4px;font-size:11px;cursor:default';
+      r.querySelector('.bm')?.after(badge);
+    } else if (!hasDraft && badge) {
+      badge.remove();
+    }
+  });
+}
 const sb = async v => {
   _bm = v;
   try { await fetch('/api/bookmarks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ job_ids: v }) }); } catch {}
@@ -141,9 +171,22 @@ function openDraft(idx) {
   const ql = document.getElementById('dp-qlist');
   ql.innerHTML = '';
   DEFAULT_QS.forEach(q => addQ(q));
-  document.getElementById('dp-out').style.display = 'none';
-  document.getElementById('dp-copy').style.display = 'none';
-  document.getElementById('dp-out').textContent = '';
+  // 저장된 초안 복원
+  const jobId = _dpJob.company + '|' + _dpJob.title;
+  const saved = _drafts[jobId];
+  const out = document.getElementById('dp-out');
+  const savebtn = document.getElementById('dp-save');
+  if (saved) {
+    out.textContent = saved;
+    out.style.display = 'block';
+    document.getElementById('dp-copy').style.display = 'inline-block';
+    if (savebtn) { savebtn.style.display = 'inline-block'; savebtn.textContent = '💾 저장됨'; }
+  } else {
+    out.style.display = 'none';
+    out.textContent = '';
+    document.getElementById('dp-copy').style.display = 'none';
+    if (savebtn) savebtn.style.display = 'none';
+  }
   document.getElementById('dp').classList.add('open');
 }
 function closeDraft() { document.getElementById('dp').classList.remove('open'); }
@@ -167,6 +210,8 @@ async function genDraft() {
     const out = document.getElementById('dp-out');
     out.textContent = d.draft; out.style.display = 'block';
     document.getElementById('dp-copy').style.display = 'inline-block';
+    const savebtn = document.getElementById('dp-save');
+    if (savebtn) { savebtn.style.display = 'inline-block'; savebtn.textContent = '💾 저장'; }
   } catch { alert('네트워크 오류'); }
   finally { btn.disabled = false; btn.textContent = '✨ 초안 생성'; }
 }
@@ -174,6 +219,17 @@ function copyDraft() {
   navigator.clipboard.writeText(document.getElementById('dp-out').textContent);
   const b = document.getElementById('dp-copy'); b.textContent = '✓ 복사됨';
   setTimeout(() => b.textContent = '📋 복사', 1500);
+}
+async function saveDraft() {
+  if (!_dpJob) return;
+  const text = document.getElementById('dp-out').textContent.trim();
+  if (!text) return;
+  const jobId = _dpJob.company + '|' + _dpJob.title;
+  const btn = document.getElementById('dp-save');
+  btn.disabled = true; btn.textContent = '저장 중...';
+  await saveDraftToServer(jobId, text);
+  btn.disabled = false; btn.textContent = '✓ 저장됨';
+  setTimeout(() => { btn.textContent = '💾 저장'; }, 2000);
 }
 
 // ── Resume / Analysis / Matching ─────────────────────────────────
@@ -267,6 +323,7 @@ async function saveR() {
 window.addEventListener('load', async () => {
   try { const r = await fetch('/api/bookmarks'); const d = await r.json(); _bm = d.job_ids || []; } catch { _bm = []; }
   initBM(); updBC();
+  await loadDrafts();
 
   try {
     const r = await fetch('/api/resume'); const d = await r.json();
