@@ -197,3 +197,12 @@ def delete_application(user_id, job_key):
                     params={"user_id": f"eq.{user_id}", "job_key": f"eq.{job_key}"}, timeout=10)
     except Exception:
         pass
+
+
+def save_app_notes(user_id, job_key, notes):
+    try:
+        _req.patch(_url("applications"), headers=_h(),
+                   params={"user_id": f"eq.{user_id}", "job_key": f"eq.{job_key}"},
+                   json={"notes": notes, "updated_at": datetime.utcnow().isoformat()}, timeout=10)
+    except Exception:
+        pass

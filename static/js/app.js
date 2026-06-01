@@ -205,6 +205,8 @@ function renderAppPanel() {
       const titleEsc = (a.title||a.job_key).replace(/</g,'&lt;').replace(/"/g,'&quot;');
       const coEsc    = (a.company||'').replace(/</g,'&lt;');
       const keyEsc   = a.job_key.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      const noteId   = 'anotes-' + btoa(unescape(encodeURIComponent(a.job_key))).replace(/[^a-zA-Z0-9]/g,'').slice(0,20);
+      const notesEsc = (a.notes||'').replace(/</g,'&lt;').replace(/"/g,'&quot;');
       const optHtml  = Object.entries(APP_LABELS).map(([v,l]) =>
         `<option value="${v}" ${v===a.status?'selected':''}>${l}</option>`).join('');
       return `<div class="app-row">
@@ -214,7 +216,12 @@ function renderAppPanel() {
         </div>
         <select class="app-inline-sel" onchange="changeApp(this,'${keyEsc}')"
                 style="border:1px solid ${c};color:${c};background:${APP_BGS[s]}">${optHtml}</select>
+        <button class="app-note-btn ${a.notes ? 'has-note' : ''}" onclick="toggleAppNotes('${keyEsc}')" title="메모">📝</button>
         <button class="app-del" onclick="delApp('${keyEsc}')" title="삭제">✕</button>
+      </div>
+      <div class="app-notes-wrap" id="${noteId}" style="display:none">
+        <textarea class="app-notes-ta" placeholder="면접 후기, 담당자 연락처, 연봉 협상 메모 등..."
+                  oninput="scheduleNotesSave('${keyEsc}',this)">${notesEsc}</textarea>
       </div>`;
     }).join('');
     return `<div class="app-group">
@@ -239,6 +246,27 @@ async function changeApp(sel, jobKey) {
     if (_apps[jobKey]) _apps[jobKey].status = status;
     markAppRows(); updAC(); renderAppPanel();
   } catch { alert('저장 실패'); }
+}
+
+let _noteTimers = {};
+function toggleAppNotes(jobKey) {
+  const el = document.getElementById('anotes-' + btoa(unescape(encodeURIComponent(jobKey))).replace(/[^a-zA-Z0-9]/g,'').slice(0,20));
+  if (!el) return;
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+  if (el.style.display === 'block') el.querySelector('textarea')?.focus();
+}
+
+function scheduleNotesSave(jobKey, ta) {
+  clearTimeout(_noteTimers[jobKey]);
+  _noteTimers[jobKey] = setTimeout(async () => {
+    try {
+      await fetch('/api/applications', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ job_key: jobKey, notes: ta.value }),
+      });
+      if (_apps[jobKey]) _apps[jobKey].notes = ta.value;
+    } catch {}
+  }, 800);
 }
 
 async function delApp(jobKey) {
@@ -432,6 +460,98 @@ async function saveDraft() {
   await saveDraftToServer(jobId, text);
   btn.disabled = false; btn.textContent = '✓ 저장됨';
   setTimeout(() => { btn.textContent = '💾 저장'; }, 2000);
+}
+
+// ── Question Library ─────────────────────────────────────────────
+const Q_LIBRARY = [
+  // 자기소개 · 지원동기
+  { c:'자기소개·지원동기', q:'1분 자기소개를 해주세요.' },
+  { c:'자기소개·지원동기', q:'이 회사에 지원하게 된 동기를 구체적으로 설명해주세요.' },
+  { c:'자기소개·지원동기', q:'이 직무를 선택하게 된 이유가 무엇인가요?' },
+  { c:'자기소개·지원동기', q:'10년 후 본인의 모습을 설명해주세요.' },
+  { c:'자기소개·지원동기', q:'타사도 지원했나요? 왜 우리 회사를 선택했나요?' },
+  { c:'자기소개·지원동기', q:'본인을 한 단어로 표현한다면 무엇인가요? 그 이유는?' },
+  // 역량 · 경험
+  { c:'역량·경험', q:'가장 도전적이었던 프로젝트 경험을 말씀해주세요.' },
+  { c:'역량·경험', q:'성과를 위해 초과 노력을 기울인 경험이 있나요?' },
+  { c:'역량·경험', q:'실패 경험과 그로부터 배운 점을 말씀해주세요.' },
+  { c:'역량·경험', q:'짧은 기간에 새로운 기술을 습득했던 경험이 있나요?' },
+  { c:'역량·경험', q:'본인이 주도적으로 문제를 발견하고 해결한 경험을 말씀해주세요.' },
+  { c:'역량·경험', q:'데이터나 근거를 바탕으로 의사결정을 내린 경험을 설명해주세요.' },
+  { c:'역량·경험', q:'동시에 여러 업무를 처리해야 했던 경험과 대처법을 설명해주세요.' },
+  { c:'역량·경험', q:'고객 또는 사용자 피드백을 반영해 개선한 사례가 있나요?' },
+  // 팀워크 · 협업
+  { c:'팀워크·협업', q:'팀 내 갈등을 해결했던 경험을 구체적으로 설명하세요.' },
+  { c:'팀워크·협업', q:'리더십을 발휘했던 경험을 설명해주세요.' },
+  { c:'팀워크·협업', q:'다양한 배경의 팀원과 협업한 경험이 있나요?' },
+  { c:'팀워크·협업', q:'팀의 성과를 위해 개인 이익을 양보한 경험이 있나요?' },
+  { c:'팀워크·협업', q:'원격/비대면 환경에서 협업한 경험을 말씀해주세요.' },
+  { c:'팀워크·협업', q:'비전공 부서(기획, 디자인, 영업 등)와 협업한 경험이 있나요?' },
+  // 직무 적합성
+  { c:'직무 적합성', q:'본인의 전공/경험이 이 직무에 어떻게 도움이 되나요?' },
+  { c:'직무 적합성', q:'보유한 기술 스택과 실무 경험을 구체적으로 설명해주세요.' },
+  { c:'직무 적합성', q:'이 직무에서 가장 중요한 역량은 무엇이라고 생각하나요?' },
+  { c:'직무 적합성', q:'이 업계의 최신 트렌드에 대해 어떻게 생각하시나요?' },
+  { c:'직무 적합성', q:'포트폴리오/작업물 중 가장 자신 있는 것을 설명해주세요.' },
+  { c:'직무 적합성', q:'이 직무에서 첫 3개월 안에 어떤 성과를 낼 수 있나요?' },
+  // 강점 · 약점
+  { c:'강점·약점', q:'본인의 가장 큰 강점 3가지를 말씀해주세요.' },
+  { c:'강점·약점', q:'본인의 단점과 이를 극복하려는 노력을 설명해주세요.' },
+  { c:'강점·약점', q:'동료들이 당신을 어떻게 평가하나요?' },
+  { c:'강점·약점', q:'상사/교수에게 들은 긍정적인 피드백과 부정적인 피드백은?' },
+  { c:'강점·약점', q:'스트레스 상황에서 어떻게 대처하나요?' },
+  // 입사 후 포부
+  { c:'입사 후 포부', q:'입사 후 3~6개월 내 이루고 싶은 목표가 있나요?' },
+  { c:'입사 후 포부', q:'이 회사에서 장기적으로 어떤 가치를 만들고 싶으신가요?' },
+  { c:'입사 후 포부', q:'5년 뒤 이 회사에서 어떤 역할을 맡고 싶으신가요?' },
+  { c:'입사 후 포부', q:'이 회사/서비스를 더 발전시키기 위한 아이디어가 있나요?' },
+  // 상황 판단
+  { c:'상황판단', q:'상사의 지시가 비효율적이라고 판단될 때 어떻게 하시겠습니까?' },
+  { c:'상황판단', q:'마감 기한이 촉박한 상황에서 어떻게 우선순위를 정하나요?' },
+  { c:'상황판단', q:'불확실한 상황에서 결정을 내려야 할 때 어떻게 접근하나요?' },
+  { c:'상황판단', q:'본인이 옳다고 생각하는 방향과 팀의 방향이 다를 때 어떻게 하나요?' },
+  { c:'상황판단', q:'급격한 방향 전환이 필요할 때 어떻게 대응하나요?' },
+  // 기타
+  { c:'기타', q:'지원 전 우리 회사/서비스를 얼마나 사용해봤나요? 개선점은?' },
+  { c:'기타', q:'최근 읽은 책/아티클 중 인상 깊었던 것을 소개해주세요.' },
+  { c:'기타', q:'개인 프로젝트나 사이드 프로젝트를 진행한 경험이 있나요?' },
+  { c:'기타', q:'연봉 외에 직장을 선택할 때 중요시하는 요소는 무엇인가요?' },
+];
+
+function openQLibrary() {
+  let modal = document.getElementById('qlib-modal');
+  if (!modal) {
+    const cats = [...new Set(Q_LIBRARY.map(q => q.c))];
+    const catHtml = cats.map(cat => {
+      const qs = Q_LIBRARY.filter(q => q.c === cat);
+      return `<div class="qlib-cat">
+        <div class="qlib-cat-hd">${cat}</div>
+        ${qs.map(({q}) => `<div class="qlib-item" onclick="addQFromLib(this)">${q}</div>`).join('')}
+      </div>`;
+    }).join('');
+    modal = document.createElement('div');
+    modal.id = 'qlib-modal';
+    modal.className = 'qlib-overlay';
+    modal.innerHTML = `
+      <div class="qlib-box">
+        <div class="qlib-head">
+          <span>📚 자소서 문항 라이브러리 <small style="color:#aaa;font-weight:400">(클릭하면 추가)</small></span>
+          <button onclick="document.getElementById('qlib-modal').remove()" style="background:none;border:none;color:#aaa;font-size:20px;cursor:pointer;line-height:1">✕</button>
+        </div>
+        <div class="qlib-body">${catHtml}</div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  } else {
+    modal.style.display = 'flex';
+  }
+}
+
+function addQFromLib(el) {
+  addQ(el.textContent);
+  el.style.background = '#e6f4ea';
+  el.style.color = '#34a853';
+  setTimeout(() => { el.style.background = ''; el.style.color = ''; }, 1200);
 }
 
 // ── Resume / Analysis / Matching ─────────────────────────────────

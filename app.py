@@ -699,7 +699,9 @@ def api_applications():
     if not job_key:
         return jsonify({"error": "job_key required"}), 400
     status = data.get("status", "").strip()
-    if not status:
+    if "notes" in data and not status:
+        db.save_app_notes(uid, job_key, data["notes"])
+    elif not status:
         db.delete_application(uid, job_key)
     else:
         db.upsert_application(uid, job_key, status,
