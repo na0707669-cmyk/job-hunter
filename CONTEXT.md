@@ -242,18 +242,106 @@ dedup(jobs) / mark_new(jobs) / save_seen(jobs) / load_seen()
 
 ## 미완성 / 다음 작업 후보
 
-### 크롤러 추가 (조사 완료, 미구현)
-- [ ] **링커리어** — 대외활동 플랫폼이므로 구현 보류.
-- [ ] **캐치** — `/api/v1.0/recruit/` 경로 확인 (robots.txt). 그러나 직접 requests 접근 시 403. 인증 헤더 또는 Playwright 필요. 조사 추가 필요.
+> 우선순위: ⭐⭐⭐ 핵심 · ⭐⭐ 고가치 · ⭐ 있으면 좋음
 
-### 기능 개선
-- [ ] **회사 정보 자동 서치 (DART API)** — DART_API_KEY 환경변수 필요. 상장사 재무/직원 수 표시.
-- [x] **원티드 stacks 필드** — `_fetch_wanted_stacks()` 병렬 fetch, 상위 20개 공고 대상 (job_hunt.py)
-- [x] **CSV 북마크 내보내기** — `/export.csv?bm=1` 파라미터 추가, 검색 결과 중 북마크된 것만 필터 (app.py)
-- [ ] 북마크에 자소서 저장 — 구현됨. 자소서 히스토리(버전별 초안) 추가 가능
-- [x] **이력서 버전 diff** — 버전 목록에 "비교" 버튼 추가, LCS 기반 라인 diff (app.js)
-- [ ] 자소서 문항 자동 생성 — 구현됨. 자소설닷컴 Playwright 통한 실제 문항 크롤링 가능
-- [x] **회원가입 승인제** — is_approved 컬럼 추가, 관리자 어드민에서 승인/거절 (db.py, app.py, admin.html)
+---
+
+### 🔴 A. 지원 관리 (가장 큰 공백, 취준 핵심 워크플로우)
+
+| 항목 | 설명 | 우선순위 |
+|---|---|---|
+| **지원 현황 트래커** | 공고별 상태 관리: 관심 → 지원예정 → 지원완료 → 서류통과 → 면접 → 최종합격/불합격. DB `applications` 테이블 신설. 북마크와 별개로 진행 상황 추적. | ⭐⭐⭐ |
+| **지원 달력/타임라인** | 마감일·면접일 기반 캘린더 뷰. FullCalendar.js 또는 직접 구현. | ⭐⭐ |
+| **지원 메모** | 공고별 자유 메모 (면접 후기, 담당자 이름, 연봉 협상 내역 등). `applications.notes TEXT` 컬럼. | ⭐⭐ |
+| **대시보드** | 지원 현황 요약 카드 (지원 N건, 서류 N건, 면접 N건, 합격 N건). 메인 또는 `/dashboard` 페이지. | ⭐⭐ |
+
+**DB 신규 테이블 (지원 트래커용)**
+```sql
+CREATE TABLE IF NOT EXISTS applications (
+  id         SERIAL PRIMARY KEY,
+  user_id    INT REFERENCES users(id) ON DELETE CASCADE,
+  company    TEXT,
+  title      TEXT,
+  link       TEXT,
+  site       TEXT,
+  status     TEXT DEFAULT 'saved',  -- saved/applied/docs_pass/interview/offer/rejected
+  applied_at DATE,
+  interview_at TIMESTAMPTZ,
+  notes      TEXT DEFAULT '',
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+```
+
+---
+
+### 🟠 B. AI 기능 고도화
+
+| 항목 | 설명 | 우선순위 |
+|---|---|---|
+| **자소서 첨삭** | 작성된 자소서를 AI가 문단별 피드백 (논리성·구체성·직무적합도). 드로어 내 "✏️ 첨삭" 버튼. | ⭐⭐⭐ |
+| **면접 예상 질문 생성** | 공고·이력서 기반 예상 면접 질문 5~10개 + 답변 가이드. `/api/interview-questions` 엔드포인트. | ⭐⭐⭐ |
+| **회사 리서치 요약** | 회사명으로 최근 뉴스·사업 방향·문화 AI 요약. DeepSeek web search 또는 _fetch_company_info 확장. | ⭐⭐ |
+| **연봉 분석** | 직군·경력별 평균 연봉 DeepSeek 추론 (실시간 데이터 없으므로 LLM 추론 기반). | ⭐ |
+| **키워드 트렌드** | 검색 결과 기반 자주 등장 스킬스택 집계 및 차트 표시. 순수 Python 집계. | ⭐⭐ |
+
+---
+
+### 🟡 C. 이력서·자소서 고도화
+
+| 항목 | 설명 | 우선순위 |
+|---|---|---|
+| **이력서 PDF 출력** | 구조화된 이력서 데이터로 깔끔한 PDF 생성. `weasyprint` 또는 `reportlab` 사용. `/resume/export.pdf` 엔드포인트. | ⭐⭐⭐ |
+| **자소서 문항 라이브러리** | 자주 쓰이는 자소서 문항 50~100개 내장 DB. 업종·직군별 필터. 원클릭으로 드로어에 추가. | ⭐⭐ |
+| **자소서 히스토리** | 공고별 초안 버전 관리 (현재 1개만 저장). `bookmarks.drafts` 구조를 `{jobId: [{saved_at, text}]}` 로 변경. | ⭐⭐ |
+| **맞춤법 검사 연동** | 부산대 맞춤법 검사기 API (`speller.cs.pusan.ac.kr`) 무료 사용. 자소서 드로어 내 "맞춤법 검사" 버튼. | ⭐⭐ |
+
+---
+
+### 🟢 D. UX / 접근성
+
+| 항목 | 설명 | 우선순위 |
+|---|---|---|
+| **모바일 최적화** | 현재 데스크탑 위주. 반응형 CSS 추가. 테이블 → 카드 레이아웃 전환 (max-width: 768px). | ⭐⭐⭐ |
+| **공고 상세 모달** | 공고 제목 클릭 시 페이지 이탈 없이 모달로 공고 내용 표시. `_fetch_company_info` 재활용. | ⭐⭐ |
+| **고정 검색어 핀** | 자주 쓰는 키워드를 상단에 핀으로 고정. localStorage 저장. | ⭐ |
+| **다중 탭 저장** | 여러 검색 결과를 탭으로 유지. 현재는 검색할 때마다 덮어씀. | ⭐ |
+
+---
+
+### 🔵 E. 크롤러 추가
+
+| 항목 | 설명 | 우선순위 |
+|---|---|---|
+| **캐치(catch.co.kr)** | `/api/v1.0/recruit/` 경로 확인됨. requests 403 → Playwright 또는 인증 헤더 필요. 추가 조사 필요. | ⭐⭐ |
+| **잡플래닛(jobplanet.co.kr)** | 구직자 리뷰 사이트이나 채용공고도 있음. API 미확인. | ⭐ |
+| **회사 정보 (DART API)** | `opendart.fss.or.kr` 무료 API. DART_API_KEY 환경변수 필요. 상장사 재무·직원 수 표시. | ⭐⭐ |
+
+---
+
+### ⚪ F. 인프라 / 운영
+
+| 항목 | 설명 | 우선순위 |
+|---|---|---|
+| **마감 임박 이메일 알림** | 북마크 공고 D-3 이내 이메일 발송. SendGrid 또는 Gmail SMTP. `EMAIL_*` 환경변수 필요. | ⭐⭐ |
+| **캐시 공유** | 현재 인메모리 캐시는 서버 재시작 시 초기화. Redis 또는 파일 캐시로 영속화. | ⭐ |
+| **검색 로그** | 어떤 키워드가 자주 검색되는지 어드민에서 확인. `search_logs` 테이블. | ⭐ |
+
+---
+
+### 크롤러 상태 요약 (조사 완료)
+- [x] 사람인, 잡코리아, 그룹바이, 자소설닷컴, 원티드 — 구현 완료
+- [ ] **캐치** — robots.txt에 `/api/v1.0/recruit/` 경로 존재. requests 403. Playwright 필요.
+- [ ] **링커리어** — 대외활동 플랫폼. 구현 보류.
+
+---
+
+### 기능 완료 이력
+- [x] **원티드 stacks 필드** — 병렬 fetch, 상위 20개 (job_hunt.py)
+- [x] **CSV 북마크 내보내기** — `/export.csv?bm=1` (app.py)
+- [x] **이력서 버전 diff** — LCS 기반 라인 diff (app.js)
+- [x] **회원가입 승인제** — is_approved, 어드민 승인/거절 (db.py, app.py, admin.html)
+- [x] **다크모드** — CSS 변수 + prefers-color-scheme (style.css, auth.css, admin.css)
 
 ---
 
