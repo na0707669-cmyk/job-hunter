@@ -50,6 +50,8 @@ body { font-family: -apple-system, 'Noto Sans KR', sans-serif; background: var(-
 .search-row select { padding: 8px 9px; border: none; border-radius: 6px; font-size: 13px; background: var(--surface); color: var(--text); cursor: pointer; }
 .search-row button { padding: 8px 16px; background: #e94560; color: #fff; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; font-weight: 700; }
 .search-row button:hover { background: #c73652; }
+.search-row .pin-add { background: #383860; padding: 8px 10px; }
+.search-row .pin-add:hover { background: #505078; }
 
 /* ── User info ── */
 .uinfo { display: flex; align-items: center; gap: 10px; margin-left: auto; font-size: 12px; white-space: nowrap; }
@@ -68,6 +70,12 @@ body { font-family: -apple-system, 'Noto Sans KR', sans-serif; background: var(-
 .site-lbl input { cursor: pointer; accent-color: #e94560; }
 .site-lbl:hover { color: #fff; }
 .slow-badge { font-size: 10px; padding: 1px 6px; background: #7c3aed; color: #fff; border-radius: 8px; margin-left: 2px; }
+.pin-row { flex-basis: 100%; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; padding-top: 6px; }
+.pin-label { color: #8888aa; font-size: 11px; margin-right: 2px; }
+.pin-chip { display: inline-flex; align-items: center; gap: 5px; border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.06); color: #ddd; border-radius: 14px; padding: 3px 8px; font-size: 12px; cursor: pointer; }
+.pin-chip:hover { background: rgba(255,255,255,.12); color: #fff; }
+.pin-chip b { color: #8888aa; font-size: 11px; line-height: 1; }
+.pin-chip b:hover { color: #e94560; }
 
 /* ── Keyword history dropdown ── */
 #hist { position: absolute; top: 38px; left: 0; width: 260px; background: var(--surface); border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.3); z-index: 100; display: none; overflow: hidden; border: 1px solid var(--border); }

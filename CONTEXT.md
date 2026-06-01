@@ -38,6 +38,7 @@ Flask + Playwright + DeepSeek v4 Flash. Render(무료) 배포 완료.
 - [x] **공고 상세 모달** — 제목 옆 🔎 버튼으로 원문 사이트 이동 전 앱 안에서 공고 내용 확인
 - [x] 북마크 (서버 DB 저장)
 - [x] 키워드 히스토리 (localStorage)
+- [x] 고정 검색어 핀 (localStorage)
 - [x] NEW 배지 (seen.json 기반)
 - [x] **CSV 내보내기** — /export.csv, 검색 결과 메타 영역에 ⬇ CSV 버튼, Excel용 UTF-8 BOM
 
@@ -317,7 +318,7 @@ CREATE TABLE IF NOT EXISTS applications (
 |---|---|---|
 | **모바일 최적화** | 현재 데스크탑 위주. 반응형 CSS 추가. 테이블 → 카드 레이아웃 전환 (max-width: 768px). | ⭐⭐⭐ |
 | ~~공고 상세 모달~~ | ✅ 완료 | — |
-| **고정 검색어 핀** | 자주 쓰는 키워드를 상단에 핀으로 고정. localStorage 저장. | ⭐ |
+| ~~고정 검색어 핀~~ | ✅ 완료 | — |
 | **다중 탭 저장** | 여러 검색 결과를 탭으로 유지. 현재는 검색할 때마다 덮어씀. | ⭐ |
 
 ---
@@ -364,6 +365,7 @@ CREATE TABLE IF NOT EXISTS applications (
 - [x] **면접 예상 질문 생성** — 공고+이력서 기반 질문 10개, 면접관 의도/답변 가이드/준비 근거 포함 (`/api/interview-questions`, 드로어 내 🎤 버튼)
 - [x] **필체 샘플 반영** — 드로어 내 선택 입력칸, localStorage 보관, 자소서 초안 생성 시 샘플의 문장 리듬과 구조를 참고
 - [x] **공고 상세 모달** — 검색 결과 제목 옆 🔎 버튼, 앱 내부 상세 창, 원문 보기 버튼 유지
+- [x] **고정 검색어 핀** — 현재 검색어를 상단에 최대 10개 고정, 클릭 즉시 재검색, localStorage 저장
 
 ---
 

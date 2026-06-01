@@ -1,7 +1,10 @@
 // ── History ──────────────────────────────────────────────────────
 const HK = 'jh_h';
+const PK = 'jh_pins';
 const gh = () => { try { return JSON.parse(localStorage.getItem(HK)) || []; } catch { return []; } };
 const sh = v => localStorage.setItem(HK, JSON.stringify(v));
+const gp = () => { try { return JSON.parse(localStorage.getItem(PK)) || []; } catch { return []; } };
+const sp = v => localStorage.setItem(PK, JSON.stringify(v));
 
 function addH(q) {
   if (!q) return;
@@ -19,6 +22,34 @@ function renderH() {
 }
 function pickH(q) { document.getElementById('qi').value = q; document.getElementById('hist').style.display = 'none'; go(); }
 function delH(e, q) { e.stopPropagation(); sh(gh().filter(x => x !== q)); renderH(); }
+
+function renderPins() {
+  const box = document.getElementById('pin-row');
+  if (!box) return;
+  const pins = gp();
+  if (!pins.length) { box.style.display = 'none'; return; }
+  box.innerHTML = '<span class="pin-label">고정 검색어</span>' + pins.map(q =>
+    `<button class="pin-chip" onclick="pickPin('${q}')"><span>${q}</span><b onclick="unpin(event,'${q}')">✕</b></button>`
+  ).join('');
+  box.style.display = 'flex';
+}
+function pinCurrent() {
+  const q = document.getElementById('qi').value.trim();
+  if (!q) return;
+  const pins = gp().filter(x => x !== q);
+  pins.unshift(q);
+  sp(pins.slice(0, 10));
+  renderPins();
+}
+function pickPin(q) {
+  document.getElementById('qi').value = q;
+  go();
+}
+function unpin(e, q) {
+  e.stopPropagation();
+  sp(gp().filter(x => x !== q));
+  renderPins();
+}
 
 document.getElementById('qi').addEventListener('focus', renderH);
 document.addEventListener('click', e => {
@@ -906,6 +937,7 @@ function showDiff(idx) {
 
 // ── Init ─────────────────────────────────────────────────────────
 window.addEventListener('load', async () => {
+  renderPins();
   try { const r = await fetch('/api/bookmarks'); const d = await r.json(); _bm = d.job_ids || []; } catch { _bm = []; }
   initBM(); updBC();
   await loadDrafts();

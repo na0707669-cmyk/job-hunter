@@ -21,6 +21,7 @@
       <option value="startup"{% if size=='startup'%}selected{% endif %}>스타트업</option>
     </select>
     <button onclick="go()">검색</button>
+    <button class="pin-add" onclick="pinCurrent()" title="현재 검색어 고정">핀</button>
   </div>
   {% if current_user %}
   <div class="uinfo">
@@ -38,6 +39,7 @@
     </label>
     {% endfor %}
   </div>
+  <div id="pin-row" class="pin-row" style="display:none"></div>
 </div>
 
 <!-- ── Resume panel ── -->
