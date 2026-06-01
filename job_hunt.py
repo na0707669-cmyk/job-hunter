@@ -244,8 +244,8 @@ def search_wanted(keyword):
     resp = get(
         f"https://www.wanted.co.kr/api/v4/jobs"
         f"?country=kr&job_sort=job.latest_order&years=-1&locations=all&limit=30"
-        f"&keywords={quote(keyword)}",
-        headers={"Referer": "https://www.wanted.co.kr", "Accept": "application/json"},
+        f"&query={quote(keyword)}",
+        headers={"Referer": "https://www.wanted.co.kr", "Accept": "application/json", "x-wanted-language": "ko"},
     )
     items = resp.json().get("data", [])
     jobs = []
