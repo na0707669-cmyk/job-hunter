@@ -3,6 +3,7 @@ import json
 import re
 from datetime import datetime
 from urllib.parse import quote
+from concurrent.futures import ThreadPoolExecutor
 
 import requests
 from bs4 import BeautifulSoup
@@ -240,6 +241,18 @@ def dedup(jobs):
     return result
 
 
+def _fetch_wanted_stacks(job_id, headers):
+    try:
+        r = requests.get(
+            f"https://www.wanted.co.kr/api/v4/jobs/{job_id}",
+            headers=headers, timeout=6,
+        )
+        tags = r.json().get("job", {}).get("skill_tags", [])
+        return ", ".join(t.get("title", "") for t in tags if t.get("title"))
+    except Exception:
+        return ""
+
+
 def search_wanted(keyword):
     _headers = {"Referer": "https://www.wanted.co.kr", "Accept": "application/json", "x-wanted-language": "ko"}
     _base = (
@@ -257,11 +270,13 @@ def search_wanted(keyword):
     # 전체 공고 (years=-1 = 무관)
     items = get(_base + "&years=-1", headers=_headers).json().get("data", [])
     jobs = []
+    job_ids = []
     for item in items:
         due = item.get("due_time")
         deadline = due[:10].replace("-", ".") if due else ""
         jid = item["id"]
         career = "신입" if jid in newbie_ids else "경력"
+        job_ids.append(jid)
         jobs.append({
             "site": "원티드",
             "size": "스타트업",
@@ -274,6 +289,15 @@ def search_wanted(keyword):
             "career": career,
             "stacks": "",
         })
+    # 상위 20개 공고 stacks 병렬 fetch
+    MAX_STACKS = 20
+    with ThreadPoolExecutor(max_workers=10) as ex:
+        futures = {ex.submit(_fetch_wanted_stacks, job_ids[i], _headers): i
+                   for i in range(min(len(jobs), MAX_STACKS))}
+        for fut, idx in futures.items():
+            stacks = fut.result()
+            if stacks:
+                jobs[idx]["stacks"] = stacks
     return jobs
 
 

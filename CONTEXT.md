@@ -84,6 +84,10 @@ ALTER TABLE bookmarks ADD COLUMN IF NOT EXISTS drafts JSONB NOT NULL DEFAULT '{}
 
 -- 이력서 버전 관리 (migrations/add_versions_column.sql)
 ALTER TABLE resumes ADD COLUMN IF NOT EXISTS versions JSONB NOT NULL DEFAULT '[]';
+
+-- 회원가입 승인제 (migrations/add_is_approved_column.sql)
+-- 기존 유저는 모두 TRUE(승인됨)로 처리됨
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_approved BOOLEAN NOT NULL DEFAULT TRUE;
 ```
 
 ---
@@ -239,17 +243,17 @@ dedup(jobs) / mark_new(jobs) / save_seen(jobs) / load_seen()
 ## 미완성 / 다음 작업 후보
 
 ### 크롤러 추가 (조사 완료, 미구현)
-- [ ] **링커리어** — GraphQL API 있으나 텍스트 검색 불가. Playwright 필요. 메모리 부담으로 보류.
-- [ ] **캐치** — Nuxt.js Vue 앱. API 엔드포인트 미확인. 추가 조사 필요.
+- [ ] **링커리어** — 대외활동 플랫폼이므로 구현 보류.
+- [ ] **캐치** — `/api/v1.0/recruit/` 경로 확인 (robots.txt). 그러나 직접 requests 접근 시 403. 인증 헤더 또는 Playwright 필요. 조사 추가 필요.
 
 ### 기능 개선
 - [ ] **회사 정보 자동 서치 (DART API)** — DART_API_KEY 환경변수 필요. 상장사 재무/직원 수 표시.
-- [ ] 원티드 stacks 필드 — 리스트 API에 없음. 개별 공고 detail API 호출 필요 (30건 × 1 req = 부담)
-- [ ] CSV 내보내기 — 현재 구현됨. 북마크만 내보내기 옵션 추가 가능
+- [x] **원티드 stacks 필드** — `_fetch_wanted_stacks()` 병렬 fetch, 상위 20개 공고 대상 (job_hunt.py)
+- [x] **CSV 북마크 내보내기** — `/export.csv?bm=1` 파라미터 추가, 검색 결과 중 북마크된 것만 필터 (app.py)
 - [ ] 북마크에 자소서 저장 — 구현됨. 자소서 히스토리(버전별 초안) 추가 가능
-- [ ] 이력서 버전 관리 — 구현됨. 버전 간 diff 표시 추가 가능
+- [x] **이력서 버전 diff** — 버전 목록에 "비교" 버튼 추가, LCS 기반 라인 diff (app.js)
 - [ ] 자소서 문항 자동 생성 — 구현됨. 자소설닷컴 Playwright 통한 실제 문항 크롤링 가능
-- [ ] 회원가입 승인제 전환 (현재 공개 회원가입)
+- [x] **회원가입 승인제** — is_approved 컬럼 추가, 관리자 어드민에서 승인/거절 (db.py, app.py, admin.html)
 
 ---
 

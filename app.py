@@ -316,12 +316,15 @@ def login_page():
             return "잘못된 요청입니다.", 403
         try:
             user = db.check_password(request.form["username"], request.form["password"])
-            if user:
+            if user == "pending":
+                error = "승인 대기 중입니다. 관리자에게 문의하세요."
+            elif user:
                 session["user_id"]  = user["id"]
                 session["username"] = user["username"]
                 session["is_admin"] = user["is_admin"]
                 return redirect(request.args.get("next") or url_for("index"))
-            error = "아이디 또는 비밀번호가 올바르지 않습니다."
+            else:
+                error = "아이디 또는 비밀번호가 올바르지 않습니다."
         except Exception as e:
             print(f"[LOGIN ERROR] {e}")
             error = f"DB 오류: {e}"
@@ -361,8 +364,8 @@ def register():
             error = "비밀번호는 6자 이상이어야 합니다."
         else:
             try:
-                db.create_user(username, password, is_admin=False)
-                ok = "가입 완료! 로그인해주세요."
+                db.create_user(username, password, is_admin=False, is_approved=False)
+                ok = "가입 신청 완료! 관리자 승인 후 로그인할 수 있습니다."
             except Exception as e:
                 error = "이미 사용 중인 아이디이거나 오류가 발생했습니다."
     return render_template("register.html", error=error, ok=ok)
@@ -378,10 +381,11 @@ def logout():
 @login_required
 @admin_required
 def admin_page():
-    users   = db.list_users()
+    users         = db.list_users()
+    pending_users = db.get_pending_users()
     msg     = request.args.get("msg")
     msg_err = request.args.get("err")
-    return render_template("admin.html", users=users, msg=msg, msg_err=msg_err)
+    return render_template("admin.html", users=users, pending_users=pending_users, msg=msg, msg_err=msg_err)
 
 
 @app.route("/admin/users", methods=["POST"])
@@ -400,6 +404,16 @@ def admin_add_user():
         return redirect(url_for("admin_page", msg=f"{username} 추가 완료"))
     except Exception as e:
         return redirect(url_for("admin_page", msg=f"오류: {e}", err=1))
+
+
+@app.route("/admin/users/<int:uid>/approve", methods=["POST"])
+@login_required
+@admin_required
+def admin_approve_user(uid):
+    if not _csrf_validate():
+        return "잘못된 요청입니다.", 403
+    db.approve_user(uid)
+    return redirect(url_for("admin_page", msg="승인 완료"))
 
 
 @app.route("/admin/users/<int:uid>/delete", methods=["POST"])
@@ -691,13 +705,19 @@ def export_csv():
 
     results = mark_new(dedup(all_raw))
 
+    bm_only = request.args.get("bm") == "1"
+    if bm_only and _db_enabled and session.get("user_id"):
+        bm_ids = set(db.get_bookmarks(session["user_id"]))
+        results = [r for r in results if f"{r['company']}|{r['title']}" in bm_ids]
+
     fields = ["site", "company", "title", "career", "location", "deadline", "dday", "stacks", "link"]
     buf = io.StringIO()
     w = csv.DictWriter(buf, fieldnames=fields, extrasaction="ignore")
     w.writeheader()
     w.writerows(results)
 
-    filename = f"jobs_{q or 'all'}.csv"
+    prefix = "bookmarks" if bm_only else "jobs"
+    filename = f"{prefix}_{q or 'all'}.csv"
     return Response(
         "﻿" + buf.getvalue(),  # BOM for Excel UTF-8
         mimetype="text/csv; charset=utf-8",

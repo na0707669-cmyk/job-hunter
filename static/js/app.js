@@ -375,13 +375,16 @@ function renderVersions(versions) {
       const lbl = v.label ? ` · ${v.label}` : '';
       return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
         <span style="font-size:12px;color:#555;flex:1">${dt}${lbl}</span>
+        <button onclick="showDiff(${i})"
+          style="font-size:11px;padding:2px 8px;background:#e8f0fe;color:#1a73e8;border:1px solid #c5d8f8;border-radius:4px;cursor:pointer">
+          비교
+        </button>
         <button onclick="restoreVersion(${i})"
           style="font-size:11px;padding:2px 8px;background:#f0f0f0;border:1px solid #ccc;border-radius:4px;cursor:pointer">
           복원
         </button>
       </div>`;
     }).join('');
-  // 복원용 데이터 저장
   el._versions = versions;
 }
 
@@ -393,6 +396,66 @@ function restoreVersion(idx) {
   if (!confirm(`"${v.saved_at?.slice(0,10) || '?'} ${v.label || ''}" 버전으로 복원하시겠습니까?\n현재 내용은 덮어씁니다.`)) return;
   const rv = document.getElementById('rv');
   if (rv) rv.value = v.content;
+}
+
+// ── 버전 diff ────────────────────────────────────────────────────
+function _computeLineDiff(oldText, newText) {
+  const A = oldText.split('\n'), B = newText.split('\n');
+  const m = A.length, n = B.length;
+  // LCS 테이블
+  const dp = Array.from({length: m + 1}, () => new Int32Array(n + 1));
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = A[i-1] === B[j-1] ? dp[i-1][j-1] + 1 : Math.max(dp[i-1][j], dp[i][j-1]);
+  // 역추적
+  const ops = [];
+  let i = m, j = n;
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && A[i-1] === B[j-1]) { ops.unshift({t:'=', s:A[i-1]}); i--; j--; }
+    else if (j > 0 && (i === 0 || dp[i][j-1] >= dp[i-1][j])) { ops.unshift({t:'+', s:B[j-1]}); j--; }
+    else { ops.unshift({t:'-', s:A[i-1]}); i--; }
+  }
+  return ops;
+}
+
+function showDiff(idx) {
+  const el = document.getElementById('ver-list');
+  const versions = el?._versions;
+  if (!versions || !versions[idx]) return;
+  const oldContent = versions[idx].content;
+  const newContent = document.getElementById('rv')?.value || '';
+  const ops = _computeLineDiff(oldContent, newContent);
+  const label = versions[idx].label ? ` (${versions[idx].label})` : '';
+  const dt = (versions[idx].saved_at || '').slice(0, 10);
+
+  const lines = ops.map(op => {
+    const esc = op.s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    if (op.t === '+') return `<div style="background:#e6f4ea;color:#137333;padding:1px 8px">+ ${esc}</div>`;
+    if (op.t === '-') return `<div style="background:#fce8e6;color:#c62828;padding:1px 8px">- ${esc}</div>`;
+    return `<div style="color:#666;padding:1px 8px;opacity:.7">  ${esc}</div>`;
+  }).join('');
+
+  let modal = document.getElementById('diff-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'diff-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;display:flex;align-items:center;justify-content:center';
+    modal.innerHTML = `<div style="background:#fff;border-radius:10px;width:700px;max-width:95vw;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+      <div id="diff-head" style="background:#1a1a2e;color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+        <span id="diff-title" style="font-size:13px;font-weight:700"></span>
+        <button onclick="document.getElementById('diff-modal').remove()" style="background:none;border:none;color:#aaa;font-size:20px;cursor:pointer;line-height:1">✕</button>
+      </div>
+      <div id="diff-legend" style="padding:8px 16px;font-size:11px;display:flex;gap:16px;background:#fafafa;border-bottom:1px solid #eee;flex-shrink:0">
+        <span style="color:#137333">+ 현재 (추가)</span>
+        <span style="color:#c62828">- 저장 버전 (삭제)</span>
+      </div>
+      <div id="diff-body" style="flex:1;overflow-y:auto;font-family:monospace;font-size:12px;line-height:1.6;padding:8px 0"></div>
+    </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  }
+  document.getElementById('diff-title').textContent = `${dt}${label} ↔ 현재 편집 중`;
+  document.getElementById('diff-body').innerHTML = lines || '<div style="padding:16px;color:#bbb;text-align:center">변경사항 없음</div>';
 }
 
 // ── Init ─────────────────────────────────────────────────────────
