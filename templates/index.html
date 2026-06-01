@@ -214,7 +214,12 @@
     <div class="dp-qs">
       <label>자소서 문항 (수정·추가 가능)</label>
       <div id="dp-qlist"></div>
-      <button id="dp-add" onclick="addQ()">+ 문항 추가</button>
+      <div style="display:flex;gap:6px;margin-top:4px">
+        <button id="dp-add" onclick="addQ()">+ 문항 추가</button>
+        <button id="dp-autoq" onclick="autoQuestions()"
+                style="background:#e8f0fe;color:#1a73e8;border:1px solid #c5d8f8;font-size:12px"
+                title="공고 내용을 분석해 이 회사에 특화된 문항 5개를 자동 생성합니다">🔍 문항 자동 생성</button>
+      </div>
     </div>
     <button id="dp-gen" onclick="genDraft()">✨ 초안 생성</button>
     <pre id="dp-out"></pre>

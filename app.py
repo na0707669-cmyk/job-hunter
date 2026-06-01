@@ -449,6 +449,53 @@ def api_analyze():
     return jsonify({"html": html})
 
 
+@app.route("/api/draft/questions", methods=["POST"])
+@login_required
+def api_draft_questions():
+    """공고 정보를 스크래핑하고 DeepSeek로 맞춤 자소서 문항 5개 생성"""
+    key = os.environ.get("DEEPSEEK_API_KEY")
+    if not key:
+        return jsonify({"error": "API key not configured"}), 503
+    job = (request.get_json(force=True) or {}).get("job", {})
+    if not job:
+        return jsonify({"error": "job required"}), 400
+
+    company_info = f"회사: {job.get('company','')}\n직무: {job.get('title','')}\n"
+    if job.get("stacks"):   company_info += f"기술스택: {job['stacks']}\n"
+    if job.get("career"):   company_info += f"경력: {job['career']}\n"
+    scraped = _fetch_company_info(job.get("link", ""), job.get("site", ""))
+    if scraped:
+        company_info += f"\n[공고 내용 발췌]\n{scraped}\n"
+
+    prompt = (
+        f"다음 채용공고를 기반으로, 이 회사/직무에 특화된 자기소개서 문항 5개를 만들어주세요.\n\n"
+        f"{company_info}\n\n"
+        "규칙:\n"
+        "- 일반적인 질문('자기소개를 해주세요') 말고 이 공고의 특성을 반영한 구체적인 질문\n"
+        "- 각 질문은 한 줄, 100자 이내\n"
+        "- 번호 없이 JSON 배열로만 반환: [\"문항1\", \"문항2\", ...]"
+    )
+    try:
+        resp = _req.post(
+            "https://api.deepseek.com/chat/completions",
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            json={"model": "deepseek-v4-flash", "messages": [{"role": "user", "content": prompt}], "temperature": 0.7},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        content = resp.json()["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        return jsonify({"error": f"DeepSeek 호출 실패: {e}"}), 500
+    m = re.search(r"\[.*\]", content, re.DOTALL)
+    if m:
+        try:
+            questions = json.loads(m.group())
+            return jsonify({"questions": questions[:5]})
+        except Exception:
+            pass
+    return jsonify({"error": "응답 파싱 실패", "raw": content[:300]}), 500
+
+
 @app.route("/api/draft", methods=["POST"])
 @login_required
 def api_draft():

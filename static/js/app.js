@@ -196,6 +196,24 @@ function addQ(txt = '') {
   d.innerHTML = `<textarea rows="2">${txt}</textarea><button onclick="this.parentElement.remove()">✕</button>`;
   ql.appendChild(d);
 }
+async function autoQuestions() {
+  if (!_dpJob) return;
+  const btn = document.getElementById('dp-autoq');
+  btn.disabled = true; btn.textContent = '분석 중...';
+  try {
+    const resp = await fetch('/api/draft/questions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ job: _dpJob }),
+    });
+    const d = await resp.json();
+    if (d.error) { alert('오류: ' + d.error); return; }
+    const ql = document.getElementById('dp-qlist');
+    ql.innerHTML = '';
+    (d.questions || []).forEach(q => addQ(q));
+  } catch { alert('네트워크 오류'); }
+  finally { btn.disabled = false; btn.textContent = '🔍 문항 자동 생성'; }
+}
+
 async function genDraft() {
   const resume = document.getElementById('rv')?.value.trim();
   if (!resume) { alert('이력서를 먼저 입력하세요.'); return; }
