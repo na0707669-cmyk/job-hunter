@@ -67,7 +67,7 @@
   <b>{{ q }}{% if also_terms %} + {{ also_terms|join(' + ') }}{% endif %}</b>
   · {{ size_label }} · 총 <b>{{ results|length }}개</b>
   {% if duped %}<span style="color:#bbb">(중복 {{ duped }}개 제거)</span>{% endif %}
-  <span style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+  <span id="meta-right" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
     {% for site, cnt in site_counts.items() %}
     <span class="stag stag-{{ site }}">{{ site }} {{ cnt }}</span>
     {% endfor %}
@@ -79,6 +79,8 @@
        title="북마크한 공고만 CSV 다운로드">⭐ CSV</a>
   </span>
 </div>
+
+<div id="trend-bar" class="trend-bar" style="display:none"></div>
 
 {% if also_terms or suggestions %}
 <div class="syn-bar">
@@ -128,6 +130,7 @@
 <div class="tabs">
   <div class="tab on" id="ta" onclick="switchTab('all')">전체</div>
   <div class="tab"    id="tb" onclick="switchTab('bm')">⭐ 북마크 <span id="bc">0</span></div>
+  {% if current_user %}<div class="tab" id="tc" onclick="switchTab('app')">📋 지원현황 <span id="ac">0</span></div>{% endif %}
 </div>
 {% endif %}
 
@@ -136,12 +139,13 @@
 {% if q and results %}
 <table>
   <thead><tr>
-    <th style="width:30px">#</th>
+    <th style="width:30px" class="hide-mob">#</th>
     <th style="width:98px">출처</th>
     <th>공고</th>
-    <th style="width:76px">지역</th>
+    <th style="width:76px" class="hide-mob">지역</th>
     <th style="width:76px">마감</th>
     <th style="width:58px">경력</th>
+    {% if current_user %}<th style="width:90px">지원상태</th>{% endif %}
     <th style="width:34px">⭐</th>
     <th style="width:34px">📝</th>
   </tr></thead>
@@ -153,7 +157,7 @@
       data-id="{{ j.company }}|{{ j.title }}"
       data-isnew="{{ 'y' if j.is_new else 'n' }}"
       data-career="{{ j.get('career','') }}">
-    <td style="color:#ccc">{{ loop.index }}</td>
+    <td class="hide-mob" style="color:#ccc">{{ loop.index }}</td>
     <td>
       <span class="sb sb-{{ j.site }}">{{ j.site }}</span><br>
       <span style="font-size:10px;color:#ccc">{{ j.size }}</span>
@@ -171,7 +175,7 @@
       </div>
       {% if j.get('stacks') %}<div class="stk">{{ j.stacks }}</div>{% endif %}
     </td>
-    <td style="font-size:12px;color:#999">{{ j.location }}</td>
+    <td class="hide-mob" style="font-size:12px;color:#999">{{ j.location }}</td>
     <td>
       {% if j.dday is not none %}
         {% if j.dday < 0 %}
@@ -190,6 +194,18 @@
       {% endif %}
     </td>
     <td>{% if j.get('career') %}<span class="cb">{{ j.career }}</span>{% endif %}</td>
+    {% if current_user %}<td>
+      <select class="app-sel" onchange="setAppStatus(this)">
+        <option value="">-</option>
+        <option value="saved">관심</option>
+        <option value="applying">지원예정</option>
+        <option value="applied">지원완료</option>
+        <option value="docs_pass">서류통과</option>
+        <option value="interview">면접</option>
+        <option value="offer">합격</option>
+        <option value="rejected">불합격</option>
+      </select>
+    </td>{% endif %}
     <td><button class="bm" onclick="bm(this,'{{ j.company }}|{{ j.title }}')">☆</button></td>
     <td><button class="bm" onclick="openDraft({{ loop.index0 }})">📝</button></td>
   </tr>
@@ -205,6 +221,14 @@
 </div>
 {% endif %}
 </div>
+
+<!-- ── Applications panel ── -->
+{% if current_user %}
+<div id="app-panel" style="display:none;padding:12px 24px 40px">
+  <div id="app-summary" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px"></div>
+  <div id="app-list"></div>
+</div>
+{% endif %}
 
 <!-- ── Draft drawer ── -->
 <div id="dp">
@@ -232,7 +256,10 @@
 </div>
 
 <!-- 서버 데이터 주입 (app.js보다 먼저 정의) -->
-<script>window.JOBS = {{ results|tojson }};</script>
+<script>
+window.JOBS = {{ results|tojson }};
+window.DB_ENABLED = {{ 'true' if current_user else 'false' }};
+</script>
 <script src="/static/js/app.js"></script>
 </body>
 </html>

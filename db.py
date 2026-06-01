@@ -158,3 +158,42 @@ def save_draft(user_id, job_id, draft_text):
         current.pop(job_id, None)
     _req.patch(_url("bookmarks"), headers=_h(), params={"user_id": f"eq.{user_id}"},
                json={"drafts": current, "updated_at": datetime.utcnow().isoformat()}, timeout=10)
+
+
+# ── Application Tracker ─────────────────────────────────────────────
+
+def get_applications(user_id):
+    try:
+        r = _req.get(_url("applications"), headers=_h(),
+                     params={"user_id": f"eq.{user_id}", "select": "*", "order": "updated_at.desc"}, timeout=10)
+        data = r.json()
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def upsert_application(user_id, job_key, status, company="", title="", link="", site=""):
+    now = datetime.utcnow().isoformat()
+    try:
+        r = _req.get(_url("applications"), headers=_h(),
+                     params={"user_id": f"eq.{user_id}", "job_key": f"eq.{job_key}", "select": "id"}, timeout=10)
+        data = r.json()
+        if isinstance(data, list) and data:
+            _req.patch(_url("applications"), headers=_h(),
+                       params={"user_id": f"eq.{user_id}", "job_key": f"eq.{job_key}"},
+                       json={"status": status, "updated_at": now}, timeout=10)
+        else:
+            _req.post(_url("applications"), headers=_h("return=minimal"),
+                      json={"user_id": user_id, "job_key": job_key, "status": status,
+                            "company": company, "title": title, "link": link, "site": site,
+                            "created_at": now, "updated_at": now}, timeout=10)
+    except Exception:
+        pass
+
+
+def delete_application(user_id, job_key):
+    try:
+        _req.delete(_url("applications"), headers=_h(),
+                    params={"user_id": f"eq.{user_id}", "job_key": f"eq.{job_key}"}, timeout=10)
+    except Exception:
+        pass

@@ -103,12 +103,196 @@ function initBM() {
 }
 function updBC() { const el = document.getElementById('bc'); if (el) el.textContent = gb().length; }
 
+// ── Application Tracker ──────────────────────────────────────────
+const APP_LABELS = { saved:'관심', applying:'지원예정', applied:'지원완료', docs_pass:'서류통과', interview:'면접', offer:'합격', rejected:'불합격' };
+const APP_COLORS = { saved:'#8888aa', applying:'#1a73e8', applied:'#34a853', docs_pass:'#0097a7', interview:'#f57c00', offer:'#4caf50', rejected:'#e94560' };
+const APP_BGS    = { saved:'#f0f0f8', applying:'#e8f0fe', applied:'#e6f4ea', docs_pass:'#e0f7fa', interview:'#fff3e0', offer:'#e8f5e9', rejected:'#fce8e6' };
+const APP_ORDER  = ['interview','docs_pass','applied','applying','saved','offer','rejected'];
+
+let _apps = {};
+let _appFilter = '';
+
+async function loadApplications() {
+  if (!window.DB_ENABLED) return;
+  try {
+    const r = await fetch('/api/applications');
+    const d = await r.json();
+    _apps = {};
+    (d.applications || []).forEach(a => { _apps[a.job_key] = a; });
+  } catch { _apps = {}; }
+  markAppRows();
+  updAC();
+}
+
+function updAC() {
+  const el = document.getElementById('ac');
+  if (el) el.textContent = Object.keys(_apps).length;
+}
+
+function colorAppSelect(sel, status) {
+  sel.style.color      = status ? APP_COLORS[status] : '';
+  sel.style.background = status ? APP_BGS[status]    : '';
+  sel.style.borderColor= status ? APP_COLORS[status] : '';
+  sel.style.fontWeight = status ? '600' : '';
+}
+
+function markAppRows() {
+  document.querySelectorAll('.jr').forEach(r => {
+    const a = _apps[r.dataset.id];
+    const sel = r.querySelector('.app-sel');
+    if (!sel) return;
+    sel.value = a ? a.status : '';
+    colorAppSelect(sel, a ? a.status : '');
+  });
+}
+
+async function setAppStatus(sel) {
+  const row = sel.closest('.jr');
+  if (!row) return;
+  const jobKey = row.dataset.id;
+  const status = sel.value;
+  const job = (window.JOBS || []).find(j => (j.company + '|' + j.title) === jobKey);
+  colorAppSelect(sel, status);
+  try {
+    await fetch('/api/applications', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ job_key: jobKey, status,
+        company: job ? job.company : '', title: job ? job.title : '',
+        link: job ? job.link : '', site: job ? job.site : '' }),
+    });
+    if (status) _apps[jobKey] = { job_key: jobKey, status, company: job?.company||'', title: job?.title||'', link: job?.link||'', site: job?.site||'' };
+    else delete _apps[jobKey];
+    updAC();
+  } catch { alert('저장 실패'); }
+}
+
+function renderAppPanel() {
+  const sumEl  = document.getElementById('app-summary');
+  const listEl = document.getElementById('app-list');
+  if (!sumEl || !listEl) return;
+
+  const apps   = Object.values(_apps);
+  const counts = {};
+  apps.forEach(a => { counts[a.status] = (counts[a.status] || 0) + 1; });
+
+  // 요약 카드
+  sumEl.innerHTML =
+    `<div class="app-sum-card ${_appFilter==='' ? 'active' : ''}" onclick="filterApp('')" style="--acolor:#1a1a2e">
+       <b>${apps.length}</b><span>전체</span>
+     </div>` +
+    APP_ORDER.map(s =>
+      `<div class="app-sum-card ${_appFilter===s ? 'active' : ''}" onclick="filterApp('${s}')" style="--acolor:${APP_COLORS[s]}">
+         <b>${counts[s]||0}</b><span>${APP_LABELS[s]}</span>
+       </div>`
+    ).join('');
+
+  // 목록
+  let filtered = apps;
+  if (_appFilter) filtered = apps.filter(a => a.status === _appFilter);
+  filtered.sort((a,b) => APP_ORDER.indexOf(a.status) - APP_ORDER.indexOf(b.status));
+
+  if (!filtered.length) {
+    listEl.innerHTML = '<div class="empty">추적 중인 공고가 없습니다</div>';
+    return;
+  }
+
+  const groups = {};
+  filtered.forEach(a => { (groups[a.status] = groups[a.status] || []).push(a); });
+
+  listEl.innerHTML = APP_ORDER.filter(s => groups[s]).map(s => {
+    const c = APP_COLORS[s];
+    const rows = groups[s].map(a => {
+      const titleEsc = (a.title||a.job_key).replace(/</g,'&lt;').replace(/"/g,'&quot;');
+      const coEsc    = (a.company||'').replace(/</g,'&lt;');
+      const keyEsc   = a.job_key.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      const optHtml  = Object.entries(APP_LABELS).map(([v,l]) =>
+        `<option value="${v}" ${v===a.status?'selected':''}>${l}</option>`).join('');
+      return `<div class="app-row">
+        <div class="app-row-info">
+          <a href="${a.link||'#'}" target="_blank" class="app-row-title">${titleEsc}</a>
+          <span class="app-row-co">${coEsc}${a.site ? ' · '+a.site : ''}</span>
+        </div>
+        <select class="app-inline-sel" onchange="changeApp(this,'${keyEsc}')"
+                style="border:1px solid ${c};color:${c};background:${APP_BGS[s]}">${optHtml}</select>
+        <button class="app-del" onclick="delApp('${keyEsc}')" title="삭제">✕</button>
+      </div>`;
+    }).join('');
+    return `<div class="app-group">
+      <div class="app-group-hd" style="color:${c}">● ${APP_LABELS[s]} <span style="font-size:11px;color:var(--text-dim)">${groups[s].length}건</span></div>
+      ${rows}
+    </div>`;
+  }).join('');
+}
+
+function filterApp(status) {
+  _appFilter = status;
+  renderAppPanel();
+}
+
+async function changeApp(sel, jobKey) {
+  const status = sel.value;
+  try {
+    await fetch('/api/applications', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ job_key: jobKey, status }),
+    });
+    if (_apps[jobKey]) _apps[jobKey].status = status;
+    markAppRows(); updAC(); renderAppPanel();
+  } catch { alert('저장 실패'); }
+}
+
+async function delApp(jobKey) {
+  try {
+    await fetch('/api/applications', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ job_key: jobKey, status: '' }),
+    });
+    delete _apps[jobKey];
+    markAppRows(); updAC(); renderAppPanel();
+  } catch { alert('삭제 실패'); }
+}
+
+// ── Keyword Trend ─────────────────────────────────────────────────
+function renderTrend() {
+  if (!window.JOBS || !window.JOBS.length) return;
+  const counts = {};
+  window.JOBS.forEach(j => {
+    if (!j.stacks) return;
+    j.stacks.split(/[,、·]/).map(s => s.trim()).filter(s => s.length >= 2 && s.length <= 30).forEach(s => {
+      counts[s] = (counts[s]||0) + 1;
+    });
+  });
+  const top = Object.entries(counts).sort((a,b) => b[1]-a[1]).slice(0, 12);
+  if (top.length < 3) return;
+  const el = document.getElementById('trend-bar');
+  if (!el) return;
+  const max = top[0][1];
+  el.innerHTML = '<span class="trend-lbl">📈 자주 보이는 스택</span>' +
+    top.map(([skill, cnt]) =>
+      `<span class="trend-chip" title="${cnt}건" style="opacity:${(0.5 + 0.5*cnt/max).toFixed(2)}"
+             onclick="document.getElementById('qi').value='${skill.replace(/'/g,'').replace(/"/g,'')}'">` +
+      `${skill}<b>${cnt}</b></span>`
+    ).join('');
+  el.style.display = 'flex';
+}
+
 // ── Tabs ─────────────────────────────────────────────────────────
 function switchTab(t) {
+  const isApp = t === 'app';
   document.getElementById('ta').classList.toggle('on', t === 'all');
   document.getElementById('tb').classList.toggle('on', t === 'bm');
-  document.getElementById('fb').checked = t === 'bm';
-  filt();
+  const tc = document.getElementById('tc');
+  if (tc) tc.classList.toggle('on', isApp);
+
+  const tw = document.querySelector('.tw');
+  const ap = document.getElementById('app-panel');
+  if (tw) tw.style.display = isApp ? 'none' : '';
+  if (ap) { ap.style.display = isApp ? 'block' : 'none'; if (isApp) { _appFilter=''; renderAppPanel(); } }
+
+  if (!isApp) {
+    document.getElementById('fb').checked = t === 'bm';
+    filt();
+  }
 }
 
 // ── Filters ──────────────────────────────────────────────────────
@@ -464,6 +648,8 @@ window.addEventListener('load', async () => {
   initBM(); updBC();
   await loadDrafts();
   await loadVersions();
+  await loadApplications();
+  renderTrend();
 
   try {
     const r = await fetch('/api/resume'); const d = await r.json();

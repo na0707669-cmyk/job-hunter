@@ -79,6 +79,16 @@ Flask + Playwright + DeepSeek v4 Flash. Render(무료) 배포 완료.
 Supabase Dashboard → SQL Editor에서 실행:
 
 ```sql
+-- 지원 현황 트래커 (migrations/add_applications_table.sql)
+CREATE TABLE IF NOT EXISTS applications (
+  id SERIAL PRIMARY KEY, user_id INT REFERENCES users(id) ON DELETE CASCADE,
+  job_key TEXT NOT NULL, company TEXT DEFAULT '', title TEXT DEFAULT '',
+  link TEXT DEFAULT '', site TEXT DEFAULT '', status TEXT DEFAULT 'saved',
+  notes TEXT DEFAULT '', created_at TIMESTAMPTZ DEFAULT now(), updated_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(user_id, job_key)
+);
+CREATE INDEX IF NOT EXISTS idx_applications_user_id ON applications(user_id);
+
 -- 북마크에 자소서 저장 (migrations/add_drafts_column.sql)
 ALTER TABLE bookmarks ADD COLUMN IF NOT EXISTS drafts JSONB NOT NULL DEFAULT '{}';
 
@@ -246,14 +256,13 @@ dedup(jobs) / mark_new(jobs) / save_seen(jobs) / load_seen()
 
 ---
 
-### 🔴 A. 지원 관리 (가장 큰 공백, 취준 핵심 워크플로우)
+### 🔴 A. 지원 관리
 
 | 항목 | 설명 | 우선순위 |
 |---|---|---|
-| **지원 현황 트래커** | 공고별 상태 관리: 관심 → 지원예정 → 지원완료 → 서류통과 → 면접 → 최종합격/불합격. DB `applications` 테이블 신설. 북마크와 별개로 진행 상황 추적. | ⭐⭐⭐ |
+| ~~지원 현황 트래커~~ | ✅ 완료 | — |
+| **지원 메모** | 공고별 자유 메모 (면접 후기, 담당자 이름 등). `applications.notes TEXT` 컬럼 활용 (이미 스키마 있음). | ⭐⭐ |
 | **지원 달력/타임라인** | 마감일·면접일 기반 캘린더 뷰. FullCalendar.js 또는 직접 구현. | ⭐⭐ |
-| **지원 메모** | 공고별 자유 메모 (면접 후기, 담당자 이름, 연봉 협상 내역 등). `applications.notes TEXT` 컬럼. | ⭐⭐ |
-| **대시보드** | 지원 현황 요약 카드 (지원 N건, 서류 N건, 면접 N건, 합격 N건). 메인 또는 `/dashboard` 페이지. | ⭐⭐ |
 
 **DB 신규 테이블 (지원 트래커용)**
 ```sql
@@ -342,6 +351,9 @@ CREATE TABLE IF NOT EXISTS applications (
 - [x] **이력서 버전 diff** — LCS 기반 라인 diff (app.js)
 - [x] **회원가입 승인제** — is_approved, 어드민 승인/거절 (db.py, app.py, admin.html)
 - [x] **다크모드** — CSS 변수 + prefers-color-scheme (style.css, auth.css, admin.css)
+- [x] **지원 현황 트래커** — 공고별 상태 추적(관심/지원예정/지원완료/서류통과/면접/합격/불합격), applications 테이블, 대시보드 탭 (app.py, db.py, app.js, style.css)
+- [x] **키워드 트렌드** — 검색 결과 stacks 집계 → 상위 12개 칩 표시 (app.js, style.css, index.html)
+- [x] **모바일 최적화** — 640px 이하 반응형 CSS (style.css, index.html hide-mob)
 
 ---
 

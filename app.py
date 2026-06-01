@@ -688,6 +688,28 @@ def api_drafts():
     return jsonify({"drafts": db.get_drafts(uid)})
 
 
+@app.route("/api/applications", methods=["GET", "POST"])
+@login_required
+def api_applications():
+    uid = session["user_id"]
+    if request.method == "GET":
+        return jsonify({"applications": db.get_applications(uid)})
+    data = request.get_json(force=True) or {}
+    job_key = data.get("job_key", "").strip()
+    if not job_key:
+        return jsonify({"error": "job_key required"}), 400
+    status = data.get("status", "").strip()
+    if not status:
+        db.delete_application(uid, job_key)
+    else:
+        db.upsert_application(uid, job_key, status,
+                              company=data.get("company", ""),
+                              title=data.get("title", ""),
+                              link=data.get("link", ""),
+                              site=data.get("site", ""))
+    return jsonify({"ok": True})
+
+
 @app.route("/export.csv")
 @login_required
 def export_csv():
