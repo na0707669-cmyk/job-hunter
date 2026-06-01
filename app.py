@@ -510,6 +510,25 @@ def api_draft_questions():
     return jsonify({"error": "응답 파싱 실패", "raw": content[:300]}), 500
 
 
+@app.route("/api/job-detail", methods=["POST"])
+@login_required
+def api_job_detail():
+    job = (request.get_json(force=True) or {}).get("job", {})
+    if not job:
+        return jsonify({"error": "job required"}), 400
+    text = _fetch_company_info(job.get("link", ""), job.get("site", ""))
+    text = re.sub(r"\s+", " ", text).strip()
+    if not text:
+        text = "공고 내용을 자동으로 불러오지 못했습니다. 원문 보기를 눌러 확인해주세요."
+    return jsonify({
+        "company": job.get("company", ""),
+        "title": job.get("title", ""),
+        "site": job.get("site", ""),
+        "link": job.get("link", ""),
+        "text": text[:3200],
+    })
+
+
 @app.route("/api/draft", methods=["POST"])
 @login_required
 def api_draft():
@@ -520,6 +539,7 @@ def api_draft():
     resume    = data.get("resume", "").strip()[:1500]
     job       = data.get("job", {})
     questions = data.get("questions", [])
+    style_sample = data.get("style_sample", "").strip()[:2000]
     if not resume or not questions:
         return jsonify({"error": "resume and questions required"}), 400
 
@@ -533,12 +553,22 @@ def api_draft():
     scraped = _fetch_company_info(job.get("link",""), job.get("site",""))
     if scraped:
         company_info += f"\n[공고 페이지에서 수집한 회사/직무 정보]\n{scraped}\n"
+    style_guide = ""
+    if style_sample:
+        style_guide = (
+            "\n[작성자 필체 샘플]\n"
+            f"{style_sample}\n\n"
+            "위 샘플에서 문장 길이, 문단 전개 방식, 자주 쓰는 연결어, 겸손/단정/구체성의 정도를 분석해 "
+            "새 답변의 말투와 구조에 반영하세요. 샘플 문장을 그대로 베끼거나 고유 사례를 옮기지는 마세요.\n"
+        )
     prompt = (
         f"지원자 이력서:\n{resume}\n\n"
         f"{company_info}\n"
+        f"{style_guide}"
         f"아래 자소서 문항에 대해 이력서와 회사 정보를 최대한 활용해 구체적으로 답변을 작성해주세요.\n\n"
         f"{qs_text}\n\n"
-        "각 문항을 '【문항 1】', '【문항 2】' 형식으로 구분해서 작성해주세요."
+        "각 문항을 '【문항 1】', '【문항 2】' 형식으로 구분해서 작성해주세요. "
+        "필체 샘플이 제공된 경우에는 AI가 쓴 듯한 과장된 표현을 피하고, 샘플 작성자의 자연스러운 리듬을 우선하세요."
     )
     try:
         resp = _req.post(
@@ -552,6 +582,55 @@ def api_draft():
     except Exception as e:
         return jsonify({"error": f"DeepSeek 호출 실패: {e}"}), 500
     return jsonify({"draft": content})
+
+
+@app.route("/api/draft/critique", methods=["POST"])
+@login_required
+def api_draft_critique():
+    key = os.environ.get("DEEPSEEK_API_KEY")
+    if not key:
+        return jsonify({"error": "API key not configured"}), 503
+    data   = request.get_json(force=True) or {}
+    resume = data.get("resume", "").strip()[:1500]
+    job    = data.get("job", {})
+    draft  = data.get("draft", "").strip()[:4000]
+    if not resume or not draft:
+        return jsonify({"error": "resume and draft required"}), 400
+
+    job_info = f"지원 공고: {job.get('company','')} — {job.get('title','')}\n"
+    if job.get("stacks"):   job_info += f"기술 스택: {job['stacks']}\n"
+    if job.get("career"):   job_info += f"경력 요건: {job['career']}\n"
+    if job.get("location"): job_info += f"위치: {job['location']}\n"
+
+    prompt = (
+        "다음 자기소개서 초안을 채용 담당자 관점에서 첨삭해주세요.\n\n"
+        f"[이력서]\n{resume}\n\n"
+        f"[공고]\n{job_info}\n"
+        f"[자소서 초안]\n{draft}\n\n"
+        "규칙:\n"
+        "- 막연한 칭찬보다 고쳐야 할 부분을 구체적으로 말하세요.\n"
+        "- 논리성, 구체성, 직무적합도, 문장력 기준으로 평가하세요.\n"
+        "- 바로 적용할 수 있는 수정 예시 문장을 3개 이상 포함하세요.\n"
+        "- 아래 HTML 조각만 반환하세요. 다른 설명 없이.\n"
+        "<div class='cr-wrap'>"
+        "<h3>총평</h3><p>...</p>"
+        "<h3>우선 수정할 부분</h3><ul><li>...</li></ul>"
+        "<h3>수정 예시</h3><ul><li><b>기존:</b> ...<br><b>개선:</b> ...</li></ul>"
+        "</div>"
+    )
+    try:
+        resp = _req.post(
+            "https://api.deepseek.com/chat/completions",
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            json={"model": "deepseek-v4-flash", "messages": [{"role": "user", "content": prompt}], "temperature": 0.45},
+            timeout=60,
+        )
+        resp.raise_for_status()
+        html = resp.json()["choices"][0]["message"]["content"].strip()
+        html = re.sub(r"^```html\s*|```$", "", html, flags=re.MULTILINE).strip()
+    except Exception as e:
+        return jsonify({"error": f"DeepSeek 호출 실패: {e}"}), 500
+    return jsonify({"html": html})
 
 
 @app.route("/api/match", methods=["POST"])
@@ -612,6 +691,54 @@ def api_match():
     if m:
         return jsonify({"scores": json.loads(m.group())})
     return jsonify({"error": "응답 파싱 실패", "raw": content[:200]}), 500
+
+
+@app.route("/api/interview-questions", methods=["POST"])
+@login_required
+def api_interview_questions():
+    key = os.environ.get("DEEPSEEK_API_KEY")
+    if not key:
+        return jsonify({"error": "API key not configured"}), 503
+    data   = request.get_json(force=True) or {}
+    resume = data.get("resume", "").strip()[:2000]
+    job    = data.get("job", {})
+    if not resume or not job:
+        return jsonify({"error": "resume and job required"}), 400
+
+    job_info = f"회사: {job.get('company','')}\n직무: {job.get('title','')}\n"
+    if job.get("stacks"):   job_info += f"기술 스택: {job['stacks']}\n"
+    if job.get("career"):   job_info += f"경력 요건: {job['career']}\n"
+    if job.get("location"): job_info += f"위치: {job['location']}\n"
+    scraped = _fetch_company_info(job.get("link", ""), job.get("site", ""))
+    if scraped:
+        job_info += f"\n[공고 내용 발췌]\n{scraped}\n"
+
+    prompt = (
+        "다음 이력서와 채용공고를 바탕으로 면접 예상 질문과 답변 가이드를 작성해주세요.\n\n"
+        f"[이력서]\n{resume}\n\n"
+        f"[채용공고]\n{job_info}\n\n"
+        "규칙:\n"
+        "- 이력서와 공고의 구체적인 접점을 반영하세요.\n"
+        "- 질문은 직무역량 4개, 경험검증 3개, 컬처핏 2개, 회사/직무 이해 1개로 총 10개.\n"
+        "- 각 항목은 질문, 면접관 의도, 답변 가이드, 준비 근거를 포함하세요.\n"
+        "- 아래 HTML 조각만 반환하세요. 다른 설명 없이.\n"
+        "<ol class='iv-list'>"
+        "<li><b>질문</b><p>면접관 의도: ...</p><p>답변 가이드: ...</p><p>준비 근거: ...</p></li>"
+        "</ol>"
+    )
+    try:
+        resp = _req.post(
+            "https://api.deepseek.com/chat/completions",
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            json={"model": "deepseek-v4-flash", "messages": [{"role": "user", "content": prompt}], "temperature": 0.45},
+            timeout=60,
+        )
+        resp.raise_for_status()
+        html = resp.json()["choices"][0]["message"]["content"].strip()
+        html = re.sub(r"^```html\s*|```$", "", html, flags=re.MULTILINE).strip()
+    except Exception as e:
+        return jsonify({"error": f"DeepSeek 호출 실패: {e}"}), 500
+    return jsonify({"html": html})
 
 
 @app.route("/api/resume/versions", methods=["GET", "POST"])

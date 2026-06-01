@@ -125,6 +125,8 @@ tr:hover td { background: var(--surface-hov); }
 /* ── Job title / sub-info ── */
 .jt a { color: var(--text); text-decoration: none; font-weight: 600; font-size: 14px; }
 .jt a:hover { color: #e94560; }
+.jd-btn { margin-left: 5px; background: var(--surface-3); border: 1px solid var(--border); border-radius: 5px; cursor: pointer; font-size: 11px; padding: 1px 5px; vertical-align: 1px; }
+.jd-btn:hover { background: #e8f0fe; border-color: #c5d8f8; }
 .js  { font-size: 12px; color: var(--text-sub); margin-top: 3px; }
 .stk { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
 .nb  { display: inline-block; font-size: 10px; padding: 1px 5px; background: #e94560; color: #fff; border-radius: 3px; margin-left: 5px; font-weight: 700; }
@@ -164,6 +166,9 @@ tr:hover td { background: var(--surface-hov); }
 .dp-job { background: var(--surface-2); border-radius: 8px; padding: 10px 12px; font-size: 13px; }
 .dp-job strong { display: block; font-size: 14px; margin-bottom: 3px; color: var(--text); }
 .dp-job span { color: var(--text-muted); }
+.dp-style label { font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+.dp-style label span { font-size: 10px; color: var(--text-muted); font-weight: 500; padding: 1px 5px; border: 1px solid var(--border-2); border-radius: 8px; }
+.dp-style textarea { width: 100%; padding: 8px 9px; border: 1px solid var(--border-2); border-radius: 6px; font-size: 12px; resize: vertical; min-height: 82px; font-family: inherit; background: var(--surface-2); color: var(--text); line-height: 1.5; }
 .dp-qs label { font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 6px; display: block; }
 .dp-q { display: flex; gap: 6px; margin-bottom: 6px; align-items: flex-start; }
 .dp-q textarea { flex: 1; padding: 7px 9px; border: 1px solid var(--border-2); border-radius: 6px; font-size: 12px; resize: vertical; min-height: 38px; font-family: inherit; background: var(--surface-2); color: var(--text); }
@@ -175,6 +180,26 @@ tr:hover td { background: var(--surface-hov); }
 #dp-gen:disabled { background: #555; cursor: not-allowed; }
 #dp-out { background: var(--surface-2); border-radius: 8px; padding: 12px; font-size: 13px; line-height: 1.7; white-space: pre-wrap; border: 1px solid var(--border); display: none; color: var(--text); }
 #dp-copy { padding: 7px 14px; background: #1a1a2e; color: #fff; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; display: none; }
+
+/* ── Draft critique / interview questions ── */
+.cr-box, .iv-box { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 2px; }
+#cr-gen, #iv-gen { width: 100%; padding: 9px 10px; color: #fff; border: none; border-radius: 8px; font-size: 13px; cursor: pointer; font-weight: 700; }
+#cr-gen { background: #388e3c; }
+#cr-gen:hover { background: #2e7d32; }
+#iv-gen { background: #0277bd; }
+#iv-gen:hover { background: #015f96; }
+#cr-gen:disabled, #iv-gen:disabled { background: #555; cursor: not-allowed; }
+#cr-out, #iv-out { display: none; margin-top: 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-size: 13px; line-height: 1.65; color: var(--text); }
+.iv-loading { color: var(--text-muted); text-align: center; padding: 12px 0; }
+.iv-list { padding-left: 18px; display: flex; flex-direction: column; gap: 12px; }
+.iv-list li { padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+.iv-list li:last-child { border-bottom: none; padding-bottom: 0; }
+.iv-list b { color: var(--text); }
+.iv-list p { margin-top: 5px; color: var(--text-sub); }
+.cr-wrap h3 { font-size: 13px; margin: 10px 0 5px; color: var(--text); }
+.cr-wrap h3:first-child { margin-top: 0; }
+.cr-wrap p, .cr-wrap li { color: var(--text-sub); }
+.cr-wrap ul { padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
 
 /* ── 이력서 분석/구조화/버전 패널 (인라인 스타일 오버라이드) ── */
 #rv-structured, #analyze-out { background: var(--surface-2) !important; border-color: var(--border) !important; color: var(--text) !important; }
@@ -219,6 +244,21 @@ tr:hover td { background: var(--surface-hov); }
 .app-notes-wrap { padding: 4px 0 8px 0; }
 .app-notes-ta { width: 100%; min-height: 56px; padding: 7px 9px; font-size: 12px; font-family: inherit; border: 1px solid var(--border-2); border-radius: 6px; background: var(--surface-2); color: var(--text); resize: vertical; line-height: 1.5; }
 .app-notes-ta:focus { outline: none; border-color: var(--accent-sub); }
+
+/* ── Job detail modal ── */
+.jd-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 420; display: none; align-items: center; justify-content: center; padding: 20px; }
+.jd-box { width: 760px; max-width: 96vw; max-height: 86vh; background: var(--surface); border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,.4); overflow: hidden; display: flex; flex-direction: column; }
+.jd-head { background: #1a1a2e; color: #fff; padding: 13px 16px; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.jd-head strong { display: block; font-size: 14px; line-height: 1.35; }
+.jd-head span { display: block; margin-top: 3px; color: #aaa; font-size: 12px; }
+.jd-head button { background: none; border: none; color: #aaa; font-size: 20px; cursor: pointer; line-height: 1; }
+.jd-head button:hover { color: #fff; }
+.jd-body { padding: 16px 18px; overflow-y: auto; color: var(--text-sub); font-size: 13px; line-height: 1.75; white-space: pre-wrap; }
+.jd-loading { color: var(--text-muted); text-align: center; padding: 36px 0; }
+.jd-actions { border-top: 1px solid var(--border); padding: 10px 16px; display: flex; justify-content: flex-end; gap: 8px; background: var(--surface-2); }
+.jd-actions a, .jd-actions button { padding: 7px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; text-decoration: none; }
+.jd-actions a { background: #1a1a2e; color: #fff; border: 1px solid #1a1a2e; }
+.jd-actions button { background: var(--surface); color: var(--text-sub); border: 1px solid var(--border-2); }
 
 /* ── Question Library modal ── */
 .qlib-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 400; display: flex; align-items: center; justify-content: center; }

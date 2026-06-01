@@ -50,6 +50,12 @@ function removeAlso(term) {
   window.location.href = u.toString();
 }
 
+function escHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
 // ── Bookmarks ────────────────────────────────────────────────────
 let _bm = [];
 const gb = () => _bm;
@@ -280,6 +286,61 @@ async function delApp(jobKey) {
   } catch { alert('삭제 실패'); }
 }
 
+// ── Job detail modal ─────────────────────────────────────────────
+async function openJobDetail(idx) {
+  const job = window.JOBS?.[idx];
+  if (!job) return;
+  let modal = document.getElementById('jd-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'jd-modal';
+    modal.className = 'jd-overlay';
+    modal.innerHTML = `
+      <div class="jd-box">
+        <div class="jd-head">
+          <div>
+            <strong id="jd-title"></strong>
+            <span id="jd-sub"></span>
+          </div>
+          <button onclick="closeJobDetail()">✕</button>
+        </div>
+        <div id="jd-body" class="jd-body"></div>
+        <div class="jd-actions">
+          <a id="jd-link" href="#" target="_blank">원문 보기</a>
+          <button onclick="closeJobDetail()">닫기</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', e => { if (e.target === modal) closeJobDetail(); });
+  }
+  document.getElementById('jd-title').textContent = job.title || '공고 상세';
+  document.getElementById('jd-sub').textContent = `${job.company || ''}${job.site ? ' · ' + job.site : ''}`;
+  document.getElementById('jd-link').href = job.link || '#';
+  const body = document.getElementById('jd-body');
+  body.innerHTML = '<div class="jd-loading">공고 내용을 불러오는 중입니다...</div>';
+  modal.style.display = 'flex';
+  try {
+    const resp = await fetch('/api/job-detail', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ job }),
+    });
+    const d = await resp.json();
+    if (d.error) {
+      body.innerHTML = `<span style="color:#e94560">${escHtml(d.error)}</span>`;
+      return;
+    }
+    body.innerHTML = `<p>${escHtml(d.text).replace(/\n/g, '<br>')}</p>`;
+  } catch {
+    body.innerHTML = '<span style="color:#e94560">네트워크 오류</span>';
+  }
+}
+
+function closeJobDetail() {
+  const modal = document.getElementById('jd-modal');
+  if (modal) modal.style.display = 'none';
+}
+
 // ── Keyword Trend ─────────────────────────────────────────────────
 function renderTrend() {
   if (!window.JOBS || !window.JOBS.length) return;
@@ -372,6 +433,7 @@ const DEFAULT_QS = [
   '입사 후 포부를 말씀해주세요.',
   '직무 관련 경험이나 역량을 설명해주세요.',
 ];
+const STYLE_KEY = 'jh_style_sample';
 let _dpJob = null;
 
 function openDraft(idx) {
@@ -388,6 +450,8 @@ function openDraft(idx) {
   const saved = _drafts[jobId];
   const out = document.getElementById('dp-out');
   const savebtn = document.getElementById('dp-save');
+  const ivOut = document.getElementById('iv-out');
+  const crOut = document.getElementById('cr-out');
   if (saved) {
     out.textContent = saved;
     out.style.display = 'block';
@@ -399,6 +463,16 @@ function openDraft(idx) {
     document.getElementById('dp-copy').style.display = 'none';
     if (savebtn) savebtn.style.display = 'none';
   }
+  if (ivOut) {
+    ivOut.style.display = 'none';
+    ivOut.innerHTML = '';
+  }
+  if (crOut) {
+    crOut.style.display = 'none';
+    crOut.innerHTML = '';
+  }
+  const styleTa = document.getElementById('dp-style-sample');
+  if (styleTa) styleTa.value = localStorage.getItem(STYLE_KEY) || '';
   document.getElementById('dp').classList.add('open');
 }
 function closeDraft() { document.getElementById('dp').classList.remove('open'); }
@@ -431,10 +505,16 @@ async function genDraft() {
   if (!resume) { alert('이력서를 먼저 입력하세요.'); return; }
   const qs = [...document.querySelectorAll('#dp-qlist textarea')].map(t => t.value.trim()).filter(Boolean);
   if (!qs.length) { alert('문항을 입력하세요.'); return; }
+  const styleSample = document.getElementById('dp-style-sample')?.value.trim() || '';
+  if (styleSample) localStorage.setItem(STYLE_KEY, styleSample);
   const btn = document.getElementById('dp-gen');
   btn.disabled = true; btn.textContent = '생성 중...';
   try {
-    const resp = await fetch('/api/draft', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ resume, job: _dpJob, questions: qs }) });
+    const resp = await fetch('/api/draft', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resume, job: _dpJob, questions: qs, style_sample: styleSample }),
+    });
     const d = await resp.json();
     if (d.error) { alert('오류: ' + d.error); return; }
     const out = document.getElementById('dp-out');
@@ -460,6 +540,68 @@ async function saveDraft() {
   await saveDraftToServer(jobId, text);
   btn.disabled = false; btn.textContent = '✓ 저장됨';
   setTimeout(() => { btn.textContent = '💾 저장'; }, 2000);
+}
+
+async function critiqueDraft() {
+  if (!_dpJob) return;
+  const resume = document.getElementById('rv')?.value.trim();
+  if (!resume) { alert('이력서를 먼저 입력하세요.'); return; }
+  const draft = document.getElementById('dp-out')?.textContent.trim();
+  if (!draft) { alert('먼저 자소서 초안을 생성하거나 저장된 초안을 열어주세요.'); return; }
+  const btn = document.getElementById('cr-gen');
+  const out = document.getElementById('cr-out');
+  btn.disabled = true; btn.textContent = '첨삭 중...';
+  if (out) {
+    out.style.display = 'block';
+    out.innerHTML = '<div class="iv-loading">초안을 읽고 첨삭하는 중입니다...</div>';
+  }
+  try {
+    const resp = await fetch('/api/draft/critique', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resume, job: _dpJob, draft }),
+    });
+    const d = await resp.json();
+    if (d.error) {
+      if (out) out.innerHTML = `<span style="color:#e94560">${d.error}</span>`;
+      return;
+    }
+    if (out) out.innerHTML = d.html || '';
+  } catch {
+    if (out) out.innerHTML = '<span style="color:#e94560">네트워크 오류</span>';
+  } finally {
+    btn.disabled = false; btn.textContent = '✏️ 첨삭';
+  }
+}
+
+async function genInterviewQuestions() {
+  if (!_dpJob) return;
+  const resume = document.getElementById('rv')?.value.trim();
+  if (!resume) { alert('이력서를 먼저 입력하세요.'); return; }
+  const btn = document.getElementById('iv-gen');
+  const out = document.getElementById('iv-out');
+  btn.disabled = true; btn.textContent = '생성 중...';
+  if (out) {
+    out.style.display = 'block';
+    out.innerHTML = '<div class="iv-loading">면접 질문을 준비하는 중입니다...</div>';
+  }
+  try {
+    const resp = await fetch('/api/interview-questions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resume, job: _dpJob }),
+    });
+    const d = await resp.json();
+    if (d.error) {
+      if (out) out.innerHTML = `<span style="color:#e94560">${d.error}</span>`;
+      return;
+    }
+    if (out) out.innerHTML = d.html || '';
+  } catch {
+    if (out) out.innerHTML = '<span style="color:#e94560">네트워크 오류</span>';
+  } finally {
+    btn.disabled = false; btn.textContent = '🎤 면접 질문';
+  }
 }
 
 // ── Question Library ─────────────────────────────────────────────
