@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>공고 사냥</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+<!-- ── Header ── -->
+<div class="top">
+  <h1>🎯 공고 사냥</h1>
+  <div class="search-row">
+    <input type="text" id="qi" placeholder="직무 키워드 (예: 백엔드 개발자)"
+           value="{{ q }}" autocomplete="off" autofocus>
+    <div id="hist"></div>
+    <select id="sz">
+      <option value="all"    {% if size=='all'    %}selected{% endif %}>전체</option>
+      <option value="big"    {% if size=='big'    %}selected{% endif %}>대기업</option>
+      <option value="corp"   {% if size=='corp'   %}selected{% endif %}>중견·중소</option>
+      <option value="startup"{% if size=='startup'%}selected{% endif %}>스타트업</option>
+    </select>
+    <button onclick="go()">검색</button>
+  </div>
+  {% if current_user %}
+  <div class="uinfo">
+    <span style="color:#aaa">{{ current_user.username }}</span>
+    {% if current_user.is_admin %}<a href="/admin">관리</a>{% endif %}
+    <a href="/logout">로그아웃</a>
+  </div>
+  {% endif %}
+  <div class="site-row">
+    {% for site in all_sites %}
+    <label class="site-lbl">
+      <input type="checkbox" class="site-cb" value="{{ site }}"
+             {% if site in active_sites %}checked{% endif %}>
+      {{ site }}{% if site == '자소설닷컴' %}<span class="slow-badge">느림</span>{% endif %}
+    </label>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- ── Resume panel ── -->
+<div class="mp" id="mp" style="display:none">
+  <h3>📄 이력서</h3>
+  <div class="mr">
+    <textarea id="rv" placeholder="이력서 내용을 붙여넣으세요 (자격증, 스킬, 경력 등)..."></textarea>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <button onclick="saveR()">저장</button>
+      <button id="analyze-btn" onclick="analyzeR()" style="background:#0277bd">이력서 분석</button>
+      <button id="match-btn" onclick="matchJobs()" style="background:#7c3aed;display:none">AI 매칭</button>
+    </div>
+  </div>
+  <div id="rv-structured"
+       style="display:none;margin-top:10px;background:#f8f8ff;border-radius:8px;padding:12px;font-size:13px;border:1px solid #e0e0f0"></div>
+  <div id="analyze-out"
+       style="display:none;margin-top:10px;background:#f8f8ff;border-radius:8px;padding:12px;font-size:13px;line-height:1.7;border:1px solid #e0e0f0"></div>
+  <div class="mn">이력서는 서버에 저장되며 자동으로 구조화됩니다.</div>
+</div>
+
+<!-- ── Result meta + filters ── -->
+{% if q %}
+<div class="meta">
+  <b>{{ q }}{% if also_terms %} + {{ also_terms|join(' + ') }}{% endif %}</b>
+  · {{ size_label }} · 총 <b>{{ results|length }}개</b>
+  {% if duped %}<span style="color:#bbb">(중복 {{ duped }}개 제거)</span>{% endif %}
+  <span style="display:flex;gap:6px;flex-wrap:wrap">
+    {% for site, cnt in site_counts.items() %}
+    <span class="stag stag-{{ site }}">{{ site }} {{ cnt }}</span>
+    {% endfor %}
+  </span>
+</div>
+
+{% if also_terms or suggestions %}
+<div class="syn-bar">
+  <span class="syn-label">관련 직무</span>
+  {% for t in also_terms %}
+  <span class="syn-active" onclick="removeAlso('{{ t }}')">{{ t }} ✕</span>
+  {% endfor %}
+  {% for s in suggestions %}
+  <span class="syn-chip" onclick="addAlso('{{ s }}')">+ {{ s }}</span>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="filter-bar">
+  <label>마감</label>
+  <select id="fd" onchange="filt()">
+    <option value="">전체</option>
+    <option value="7">D-7 이내</option>
+    <option value="14">D-14 이내</option>
+    <option value="30">D-30 이내</option>
+  </select>
+  <label style="margin-left:8px">지역</label>
+  <select id="fl" onchange="filt()">
+    <option value="">전체</option>
+    {% for loc in locations %}<option value="{{ loc }}">{{ loc }}</option>{% endfor %}
+  </select>
+  <label style="margin-left:8px">경력</label>
+  <select id="fc" onchange="filt()">
+    <option value="">전체</option>
+    <option value="신입">신입</option>
+    <option value="경력">경력</option>
+    <option value="무관">무관</option>
+  </select>
+  <label style="margin-left:8px">정렬</label>
+  <select id="fs" onchange="filt()">
+    <option value="">기본순</option>
+    <option value="dday">마감 임박순</option>
+    <option value="new">NEW 우선</option>
+  </select>
+  <label style="margin-left:8px">AI매칭만</label>
+  <input type="checkbox" id="fai" onchange="filt()">
+  <label style="margin-left:8px">북마크만</label>
+  <input type="checkbox" id="fb" onchange="filt()">
+  <span class="clr" onclick="clrF()">초기화</span>
+</div>
+
+<div class="tabs">
+  <div class="tab on" id="ta" onclick="switchTab('all')">전체</div>
+  <div class="tab"    id="tb" onclick="switchTab('bm')">⭐ 북마크 <span id="bc">0</span></div>
+</div>
+{% endif %}
+
+<!-- ── Results table ── -->
+<div class="tw">
+{% if q and results %}
+<table>
+  <thead><tr>
+    <th style="width:30px">#</th>
+    <th style="width:98px">출처</th>
+    <th>공고</th>
+    <th style="width:76px">지역</th>
+    <th style="width:76px">마감</th>
+    <th style="width:58px">경력</th>
+    <th style="width:34px">⭐</th>
+    <th style="width:34px">📝</th>
+  </tr></thead>
+  <tbody id="tb-body">
+  {% for j in results %}
+  <tr class="jr"
+      data-dday="{{ j.dday if j.dday is not none else 9999 }}"
+      data-loc="{{ j.location }}"
+      data-id="{{ j.company }}|{{ j.title }}"
+      data-isnew="{{ 'y' if j.is_new else 'n' }}"
+      data-career="{{ j.get('career','') }}">
+    <td style="color:#ccc">{{ loop.index }}</td>
+    <td>
+      <span class="sb sb-{{ j.site }}">{{ j.site }}</span><br>
+      <span style="font-size:10px;color:#ccc">{{ j.size }}</span>
+      {% if j.get('funding') %}<span class="fb">{{ j.funding }}</span>{% endif %}
+    </td>
+    <td>
+      <div class="jt">
+        <a href="{{ j.link }}" target="_blank">{{ j.title }}</a>
+        {% if j.is_new %}<span class="nb">NEW</span>{% endif %}
+      </div>
+      <div class="js">
+        {{ j.company }}
+        {% if j.get('location') %} · {{ j.location }}{% endif %}
+        {% if j.get('members') %} · {{ j.members }}인{% endif %}
+      </div>
+      {% if j.get('stacks') %}<div class="stk">{{ j.stacks }}</div>{% endif %}
+    </td>
+    <td style="font-size:12px;color:#999">{{ j.location }}</td>
+    <td>
+      {% if j.dday is not none %}
+        {% if j.dday < 0 %}
+          <span class="dd dd-e">마감</span>
+        {% elif j.dday <= 3 %}
+          <span class="dd dd-u">D-{{ j.dday }}</span>
+        {% elif j.dday <= 7 %}
+          <span class="dd dd-s">D-{{ j.dday }}</span>
+        {% else %}
+          <span class="dd dd-o">D-{{ j.dday }}</span>
+        {% endif %}
+      {% elif j.deadline %}
+        <span style="font-size:11px;color:#bbb">{{ j.deadline }}</span>
+      {% else %}
+        <span style="color:#ddd;font-size:11px">-</span>
+      {% endif %}
+    </td>
+    <td>{% if j.get('career') %}<span class="cb">{{ j.career }}</span>{% endif %}</td>
+    <td><button class="bm" onclick="bm(this,'{{ j.company }}|{{ j.title }}')">☆</button></td>
+    <td><button class="bm" onclick="openDraft({{ loop.index0 }})">📝</button></td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% elif q %}
+<div class="empty">결과 없음 — 다른 키워드를 입력해보세요</div>
+{% else %}
+<div class="empty" style="margin-top:60px">
+  키워드를 입력하고 검색하세요
+  <br><span style="font-size:12px;color:#ddd;margin-top:8px;display:block">예: 백엔드 개발자 · PM · 마케터</span>
+</div>
+{% endif %}
+</div>
+
+<!-- ── Draft drawer ── -->
+<div id="dp">
+  <div id="dp-head">
+    <h2 id="dp-title">자소서 초안</h2>
+    <button id="dp-close" onclick="closeDraft()">✕</button>
+  </div>
+  <div id="dp-body">
+    <div class="dp-job" id="dp-job-info"></div>
+    <div class="dp-qs">
+      <label>자소서 문항 (수정·추가 가능)</label>
+      <div id="dp-qlist"></div>
+      <button id="dp-add" onclick="addQ()">+ 문항 추가</button>
+    </div>
+    <button id="dp-gen" onclick="genDraft()">✨ 초안 생성</button>
+    <pre id="dp-out"></pre>
+    <button id="dp-copy" onclick="copyDraft()">📋 복사</button>
+  </div>
+</div>
+
+<!-- 서버 데이터 주입 (app.js보다 먼저 정의) -->
+<script>window.JOBS = {{ results|tojson }};</script>
+<script src="/static/js/app.js"></script>
+</body>
+</html>

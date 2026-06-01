@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>공고 사냥 - 회원가입</title>
+  <link rel="stylesheet" href="/static/css/auth.css">
+</head>
+<body>
+<div class="box">
+  <h1>🎯 회원가입</h1>
+  {% if error %}<div class="err">{{ error }}</div>{% endif %}
+  {% if ok %}<div class="ok">{{ ok }}</div>{% endif %}
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="text" name="username" placeholder="아이디 (영문/숫자)" required autofocus>
+    <input type="password" name="password" placeholder="비밀번호" required>
+    <input type="password" name="password2" placeholder="비밀번호 확인" required>
+    <button type="submit">가입하기</button>
+  </form>
+  <div class="sub">이미 계정이 있으신가요? <a href="/login">로그인</a></div>
+</div>
+</body>
+</html>

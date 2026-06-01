@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>유저 관리</title>
+  <link rel="stylesheet" href="/static/css/admin.css">
+</head>
+<body>
+<div class="wrap">
+  <h1>👥 유저 관리</h1>
+  <a class="back" href="/">← 메인으로</a>
+  <h2>유저 목록 ({{ users|length }}명)</h2>
+  <table>
+    <tr><th>아이디</th><th>권한</th><th>가입일</th><th></th></tr>
+    {% for u in users %}
+    <tr>
+      <td>{{ u.username }}</td>
+      <td>{{ '관리자' if u.is_admin else '일반' }}</td>
+      <td style="color:#999">{{ u.created_at[:10] if u.created_at else '-' }}</td>
+      <td>
+        {% if not u.is_admin %}
+        <form method="post" action="/admin/users/{{ u.id }}/delete" style="display:inline"
+              onsubmit="return confirm('{{ u.username }} 삭제?')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="del">삭제</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  <h2>유저 추가</h2>
+  {% if msg %}<div class="{{ 'merr' if msg_err else 'msg' }}">{{ msg }}</div>{% endif %}
+  <form method="post" action="/admin/users" class="add-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="text" name="username" placeholder="아이디" required>
+    <input type="password" name="password" placeholder="비밀번호" required>
+    <label><input type="checkbox" name="is_admin"> 관리자</label>
+    <button type="submit">추가</button>
+  </form>
+</div>
+</body>
+</html>
