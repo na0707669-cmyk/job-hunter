@@ -410,15 +410,34 @@ def api_match():
     if not resume or not jobs:
         return jsonify({"error": "resume and jobs required"}), 400
 
+    # 스택 정보 없는 공고만 병렬 스크래핑해서 직무 설명 보완
+    def _scrape(item):
+        idx, j = item
+        if j.get("stacks") or j.get("site") == "자소설닷컴":
+            return idx, ""
+        return idx, _fetch_company_info(j.get("link", ""), j.get("site", ""))
+
+    snippets = {}
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        for idx, text in ex.map(_scrape, enumerate(jobs)):
+            snippets[idx] = text[:200] if text else ""
+
     compressed = [
-        {"idx": i, "title": j.get("title",""), "company": j.get("company",""),
-         "stacks": j.get("stacks",""), "career": j.get("career","")}
+        {
+            "idx": i,
+            "title": j.get("title", ""),
+            "company": j.get("company", ""),
+            "stacks": j.get("stacks", ""),
+            "career": j.get("career", ""),
+            **({"desc": snippets[i]} if snippets.get(i) else {}),
+        }
         for i, j in enumerate(jobs)
     ]
     prompt = (
         "다음 이력서를 기반으로 각 공고 매칭율을 분석해주세요.\n\n"
         f"이력서:\n{resume}\n\n"
-        f"공고 목록:\n{json.dumps(compressed, ensure_ascii=False)}\n\n"
+        f"공고 목록 (desc는 공고 페이지에서 수집한 직무 설명 일부):\n"
+        f"{json.dumps(compressed, ensure_ascii=False)}\n\n"
         "JSON 배열만 반환하세요. 다른 텍스트 없이.\n"
         '형식: [{"idx":0,"score":85,"reason":"한줄이유"}, ...]'
     )
