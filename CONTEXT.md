@@ -261,7 +261,7 @@ dedup(jobs) / mark_new(jobs) / save_seen(jobs) / load_seen()
 | 항목 | 설명 | 우선순위 |
 |---|---|---|
 | ~~지원 현황 트래커~~ | ✅ 완료 | — |
-| **지원 메모** | 공고별 자유 메모 (면접 후기, 담당자 이름 등). `applications.notes TEXT` 컬럼 활용 (이미 스키마 있음). | ⭐⭐ |
+| ~~지원 메모~~ | ✅ 완료 | — |
 | **지원 달력/타임라인** | 마감일·면접일 기반 캘린더 뷰. FullCalendar.js 또는 직접 구현. | ⭐⭐ |
 
 **DB 신규 테이블 (지원 트래커용)**
@@ -352,6 +352,8 @@ CREATE TABLE IF NOT EXISTS applications (
 - [x] **회원가입 승인제** — is_approved, 어드민 승인/거절 (db.py, app.py, admin.html)
 - [x] **다크모드** — CSS 변수 + prefers-color-scheme (style.css, auth.css, admin.css)
 - [x] **지원 현황 트래커** — 공고별 상태 추적(관심/지원예정/지원완료/서류통과/면접/합격/불합격), applications 테이블, 대시보드 탭 (app.py, db.py, app.js, style.css)
+- [x] **지원 메모** — 앱 패널 각 공고에 메모 textarea, 800ms debounce 자동저장 (db.py, app.py, app.js, style.css)
+- [x] **자소서 문항 라이브러리** — 65개 내장 문항 JS 임베드, 드로어 내 📚 버튼, LLM 호출 없이 사용 가능 (app.js, style.css, index.html)
 - [x] **키워드 트렌드** — 검색 결과 stacks 집계 → 상위 12개 칩 표시 (app.js, style.css, index.html)
 - [x] **모바일 최적화** — 640px 이하 반응형 CSS (style.css, index.html hide-mob)
 
