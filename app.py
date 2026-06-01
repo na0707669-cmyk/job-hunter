@@ -39,36 +39,30 @@ if _db_enabled:
     except Exception as e:
         print(f"[WARN] DB init failed: {e} — running without DB")
 
-SIZE_SITES = {
-    "all":     ["자소설닷컴", "사람인", "잡코리아", "그룹바이", "원티드"],
-    "big":     ["자소설닷컴"],
-    "corp":    ["사람인", "잡코리아"],
-    "startup": ["그룹바이", "원티드"],
-}
-
 CACHE = {}
 CACHE_TTL = 600
 
-def _cache_key(q, size): return f"{q}|{size}"
+SCRAPERS = {
+    "사람인":     search_saramin,
+    "잡코리아":   search_jobkorea,
+    "그룹바이":   search_groupby,
+    "원티드":     search_wanted,
+    "자소설닷컴": search_jasoseol,
+}
+ALL_SITES = list(SCRAPERS.keys())
 
-def _get_cache(q, size):
-    key = _cache_key(q, size)
+def _cache_key(q, sites): return f"{q}|{','.join(sorted(sites))}"
+
+def _get_cache(q, sites):
+    key = _cache_key(q, sites)
     if key in CACHE:
         data, ts = CACHE[key]
         if time.time() - ts < CACHE_TTL:
             return data
     return None
 
-def _set_cache(q, size, data):
-    CACHE[_cache_key(q, size)] = (data, time.time())
-
-SCRAPERS = {
-    "자소설닷컴": search_jasoseol,
-    "사람인":     search_saramin,
-    "잡코리아":   search_jobkorea,
-    "그룹바이":   search_groupby,
-    "원티드":     search_wanted,
-}
+def _set_cache(q, sites, data):
+    CACHE[_cache_key(q, sites)] = (data, time.time())
 
 
 _HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
@@ -242,6 +236,11 @@ body{font-family:-apple-system,'Noto Sans KR',sans-serif;background:#f0f2f5;colo
 .search-row button:hover{background:#c73652}
 .uinfo{display:flex;align-items:center;gap:10px;margin-left:auto;font-size:12px;white-space:nowrap}
 .uinfo a{color:#8888aa;text-decoration:none}
+.site-row{flex-basis:100%;display:flex;gap:14px;flex-wrap:wrap;padding-top:8px;border-top:1px solid rgba(255,255,255,.12);margin-top:2px}
+.site-lbl{display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;color:#bbb;white-space:nowrap;user-select:none}
+.site-lbl input{cursor:pointer;accent-color:#e94560}
+.site-lbl:hover{color:#fff}
+.slow-badge{font-size:10px;padding:1px 6px;background:#7c3aed;color:#fff;border-radius:8px;margin-left:2px}
 .uinfo a:hover{color:#fff}
 
 #hist{position:absolute;top:38px;left:0;width:260px;background:#fff;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.15);z-index:100;display:none;overflow:hidden}
@@ -353,6 +352,14 @@ tr:hover td{background:#fafbff}
     <a href="/logout">로그아웃</a>
   </div>
   {% endif %}
+  <div class="site-row">
+    {% for site in all_sites %}
+    <label class="site-lbl">
+      <input type="checkbox" class="site-cb" value="{{ site }}"{% if site in active_sites %} checked{% endif %}>
+      {{ site }}{% if site == '자소설닷컴' %}<span class="slow-badge">느림</span>{% endif %}
+    </label>
+    {% endfor %}
+  </div>
 </div>
 
 <div class="mp" id="mp" style="display:none">
@@ -516,7 +523,7 @@ function renderH(){
   box.innerHTML=h.map(q=>`<div class="hi" onclick="pickH('${q}')"><span>${q}</span><span class="hx" onclick="delH(event,'${q}')">✕</span></div>`).join('');
   box.style.display='block';
 }
-function pickH(q){document.getElementById('qi').value=q;document.getElementById('hist').style.display='none';go()}
+function pickH(q){document.getElementById('qi').value=q;document.getElementById('hist').style.display='none';go();}
 function delH(e,q){e.stopPropagation();sh(gh().filter(x=>x!==q));renderH()}
 document.getElementById('qi').addEventListener('focus',renderH);
 document.addEventListener('click',e=>{if(!e.target.closest('.search-row'))document.getElementById('hist').style.display='none'});
@@ -525,7 +532,8 @@ function go(){
   const q=document.getElementById('qi').value.trim();
   if(!q)return;
   addH(q);
-  window.location.href=`/?q=${encodeURIComponent(q)}&size=${document.getElementById('sz').value}`;
+  const sites=[...document.querySelectorAll('.site-cb:checked')].map(c=>c.value).join(',');
+  window.location.href=`/?q=${encodeURIComponent(q)}&size=${document.getElementById('sz').value}&sites=${encodeURIComponent(sites)}`;
 }
 document.getElementById('qi').addEventListener('keydown',e=>{if(e.key==='Enter')go()});
 
@@ -756,9 +764,8 @@ window.addEventListener('load',async()=>{
 </html>"""
 
 
-def _run(q, size):
-    target = SIZE_SITES.get(size, SIZE_SITES["all"])
-    tasks = {name: fn for name, fn in SCRAPERS.items() if name in target}
+def _run(q, sites):
+    tasks = {name: fn for name, fn in SCRAPERS.items() if name in sites}
     raw, counts = [], {}
 
     def fetch(name, fn):
@@ -1056,6 +1063,8 @@ def index():
     q     = request.args.get("q", "").strip()
     size  = request.args.get("size", "all")
     label = {"all": "전체", "big": "대기업", "corp": "중견·중소", "startup": "스타트업"}.get(size, "전체")
+    sites_param   = request.args.get("sites", "")
+    active_sites  = [s for s in sites_param.split(",") if s in SCRAPERS] if sites_param else ALL_SITES
     results, duped, counts, locs = [], 0, {}, []
     current_user = (
         {"username": session.get("username"), "is_admin": session.get("is_admin")}
@@ -1063,15 +1072,15 @@ def index():
     )
 
     if q:
-        cached = _get_cache(q, size)
+        cached = _get_cache(q, active_sites)
         if cached:
             results, duped, counts = cached
         else:
-            raw, counts = _run(q, size)
+            raw, counts = _run(q, active_sites)
             deduped = dedup(raw)
             results = mark_new(deduped)
             duped   = len(raw) - len(deduped)
-            _set_cache(q, size, (results, duped, counts))
+            _set_cache(q, active_sites, (results, duped, counts))
         locs = sorted({(j.get("location") or "").strip().split()[0]
                        for j in results if j.get("location")} - {""})
 
@@ -1079,6 +1088,7 @@ def index():
         HTML, q=q, size=size, size_label=label,
         results=results, duped=duped, site_counts=counts, locations=locs,
         current_user=current_user,
+        all_sites=ALL_SITES, active_sites=active_sites,
     )
 
 
