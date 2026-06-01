@@ -430,9 +430,9 @@ function showDiff(idx) {
 
   const lines = ops.map(op => {
     const esc = op.s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    if (op.t === '+') return `<div style="background:#e6f4ea;color:#137333;padding:1px 8px">+ ${esc}</div>`;
-    if (op.t === '-') return `<div style="background:#fce8e6;color:#c62828;padding:1px 8px">- ${esc}</div>`;
-    return `<div style="color:#666;padding:1px 8px;opacity:.7">  ${esc}</div>`;
+    if (op.t === '+') return `<div class="diff-add">+ ${esc}</div>`;
+    if (op.t === '-') return `<div class="diff-del">- ${esc}</div>`;
+    return `<div class="diff-ctx">  ${esc}</div>`;
   }).join('');
 
   let modal = document.getElementById('diff-modal');
@@ -440,16 +440,16 @@ function showDiff(idx) {
     modal = document.createElement('div');
     modal.id = 'diff-modal';
     modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;display:flex;align-items:center;justify-content:center';
-    modal.innerHTML = `<div style="background:#fff;border-radius:10px;width:700px;max-width:95vw;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+    modal.innerHTML = `<div style="background:var(--surface);border-radius:10px;width:700px;max-width:95vw;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.4)">
       <div id="diff-head" style="background:#1a1a2e;color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
         <span id="diff-title" style="font-size:13px;font-weight:700"></span>
         <button onclick="document.getElementById('diff-modal').remove()" style="background:none;border:none;color:#aaa;font-size:20px;cursor:pointer;line-height:1">✕</button>
       </div>
-      <div id="diff-legend" style="padding:8px 16px;font-size:11px;display:flex;gap:16px;background:#fafafa;border-bottom:1px solid #eee;flex-shrink:0">
-        <span style="color:#137333">+ 현재 (추가)</span>
-        <span style="color:#c62828">- 저장 버전 (삭제)</span>
+      <div id="diff-legend" style="padding:8px 16px;font-size:11px;display:flex;gap:16px;background:var(--surface-2);border-bottom:1px solid var(--border);flex-shrink:0">
+        <span style="color:#6fcf97">+ 현재 (추가)</span>
+        <span style="color:#eb5757">- 저장 버전 (삭제)</span>
       </div>
-      <div id="diff-body" style="flex:1;overflow-y:auto;font-family:monospace;font-size:12px;line-height:1.6;padding:8px 0"></div>
+      <div id="diff-body" style="flex:1;overflow-y:auto;font-family:monospace;font-size:12px;line-height:1.6;padding:8px 0;background:var(--surface)"></div>
     </div>`;
     document.body.appendChild(modal);
     modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });

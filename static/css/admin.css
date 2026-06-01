@@ -1,5 +1,5 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: -apple-system, 'Noto Sans KR', sans-serif; background: #f0f2f5; padding: 32px; }
+body { font-family: -apple-system, 'Noto Sans KR', sans-serif; background: #f0f2f5; padding: 32px; color: #222; }
 .wrap { max-width: 680px; margin: 0 auto; }
 h1 { font-size: 18px; font-weight: 800; color: #1a1a2e; margin-bottom: 4px; }
 .back { font-size: 13px; color: #888; text-decoration: none; display: inline-block; margin-bottom: 20px; }
@@ -18,3 +18,15 @@ tr:last-child td { border-bottom: none; }
 .add-form button { padding: 8px 18px; background: #1a1a2e; color: #fff; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; font-weight: 600; }
 .msg  { font-size: 13px; color: #34a853; margin: 8px 0; }
 .merr { font-size: 13px; color: #e94560; margin: 8px 0; }
+
+@media (prefers-color-scheme: dark) {
+  body  { background: #0f0f1e; color: #d8d8f0; }
+  h1, h2 { color: #d8d8f0; }
+  .back  { color: #7070a0; }
+  .back:hover { color: #d8d8f0; }
+  table  { background: #1a1a30; }
+  td     { border-bottom-color: #2a2a48; color: #d8d8f0; }
+  .add-form { background: #1a1a30; }
+  .add-form input[type=text],
+  .add-form input[type=password] { background: #20203a; border-color: #383860; color: #d8d8f0; }
+}

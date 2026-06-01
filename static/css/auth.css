@@ -33,3 +33,13 @@ button:hover { background: #2d2d4e; }
 .ok   { color: #34a853; font-size: 13px; margin-bottom: 12px; text-align: center; }
 .sub  { text-align: center; margin-top: 14px; font-size: 13px; color: #888; }
 .sub a { color: #1a1a2e; text-decoration: underline; }
+
+@media (prefers-color-scheme: dark) {
+  body  { background: #0f0f1e; }
+  .box  { background: #1a1a30; box-shadow: 0 2px 16px rgba(0,0,0,.4); }
+  h1    { color: #d8d8f0; }
+  input { background: #20203a; border-color: #383860; color: #d8d8f0; }
+  input:focus { border-color: #7c3aed; }
+  .sub  { color: #7070a0; }
+  .sub a { color: #a0a0e0; }
+}
