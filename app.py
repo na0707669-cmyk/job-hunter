@@ -458,6 +458,22 @@ def api_match():
     return jsonify({"error": "응답 파싱 실패", "raw": content[:200]}), 500
 
 
+@app.route("/api/resume/versions", methods=["GET", "POST"])
+@login_required
+def api_resume_versions():
+    uid = session["user_id"]
+    if request.method == "POST":
+        data  = request.get_json(force=True) or {}
+        content = data.get("content", "").strip()
+        label   = data.get("label", "").strip()
+        if not content:
+            return jsonify({"error": "content required"}), 400
+        db.save_resume_version(uid, content, label)
+        return jsonify({"ok": True})
+    versions = db.get_resume_versions(uid)
+    return jsonify({"versions": versions})
+
+
 @app.route("/api/resume", methods=["GET", "POST"])
 @login_required
 def api_resume():

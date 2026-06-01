@@ -47,6 +47,7 @@
     <textarea id="rv" placeholder="이력서 내용을 붙여넣으세요 (자격증, 스킬, 경력 등)..."></textarea>
     <div style="display:flex;flex-direction:column;gap:6px">
       <button onclick="saveR()">저장</button>
+      <button id="ver-save-btn" onclick="saveVersion()" style="background:#388e3c" title="현재 이력서를 버전으로 보관">📌 버전 저장</button>
       <button id="analyze-btn" onclick="analyzeR()" style="background:#0277bd">이력서 분석</button>
       <button id="match-btn" onclick="matchJobs()" style="background:#7c3aed;display:none">AI 매칭</button>
     </div>
@@ -55,7 +56,9 @@
        style="display:none;margin-top:10px;background:#f8f8ff;border-radius:8px;padding:12px;font-size:13px;border:1px solid #e0e0f0"></div>
   <div id="analyze-out"
        style="display:none;margin-top:10px;background:#f8f8ff;border-radius:8px;padding:12px;font-size:13px;line-height:1.7;border:1px solid #e0e0f0"></div>
-  <div class="mn">이력서는 서버에 저장되며 자동으로 구조화됩니다.</div>
+  <div id="ver-list"
+       style="display:none;margin-top:10px;background:#f9f9f9;border-radius:8px;padding:10px 12px;border:1px solid #e0e0e0;font-size:12px"></div>
+  <div class="mn">이력서는 서버에 저장되며 자동으로 구조화됩니다. 📌 버전 저장으로 최대 10개 버전을 보관할 수 있습니다.</div>
 </div>
 
 <!-- ── Result meta + filters ── -->

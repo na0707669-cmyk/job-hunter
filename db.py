@@ -91,6 +91,30 @@ def save_analysis(user_id, analysis):
                json={"analysis": analysis, "analyzed_at": datetime.utcnow().isoformat()}, timeout=10)
 
 
+def get_resume_versions(user_id):
+    """저장된 이력서 버전 목록 반환 (최신순) — [{saved_at, content, label}, ...]"""
+    r = _req.get(_url("resumes"), headers=_h(),
+                 params={"user_id": f"eq.{user_id}", "select": "versions"}, timeout=10)
+    data = r.json()
+    if isinstance(data, list) and data:
+        return data[0].get("versions") or []
+    return []
+
+
+def save_resume_version(user_id, content, label=""):
+    """현재 이력서를 버전으로 저장 (최대 10개 유지)"""
+    versions = get_resume_versions(user_id)
+    entry = {
+        "saved_at": datetime.utcnow().isoformat(timespec="seconds"),
+        "content": content,
+        "label": label or "",
+    }
+    versions.insert(0, entry)
+    versions = versions[:10]   # 최신 10개만 보관
+    _req.patch(_url("resumes"), headers=_h(), params={"user_id": f"eq.{user_id}"},
+               json={"versions": versions}, timeout=10)
+
+
 def get_bookmarks(user_id):
     r = _req.get(_url("bookmarks"), headers=_h(), params={"user_id": f"eq.{user_id}", "select": "job_ids"}, timeout=10)
     data = r.json()

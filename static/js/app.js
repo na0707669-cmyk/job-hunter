@@ -319,11 +319,70 @@ async function saveR() {
   } catch { alert('저장 실패'); }
 }
 
+// ── Resume version management ─────────────────────────────────────
+async function saveVersion() {
+  const content = document.getElementById('rv')?.value.trim();
+  if (!content) { alert('이력서를 먼저 입력하세요.'); return; }
+  const label = prompt('버전 메모 (선택, 예: "네이버 지원용")') ?? null;
+  if (label === null) return;  // 취소
+  const btn = document.getElementById('ver-save-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '저장 중...'; }
+  try {
+    await fetch('/api/resume/versions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, label }),
+    });
+    await loadVersions();
+    if (btn) btn.textContent = '✓ 저장됨';
+    setTimeout(() => { if (btn) { btn.disabled = false; btn.textContent = '📌 버전 저장'; } }, 1500);
+  } catch { alert('저장 실패'); if (btn) { btn.disabled = false; btn.textContent = '📌 버전 저장'; } }
+}
+
+async function loadVersions() {
+  try {
+    const r = await fetch('/api/resume/versions');
+    const d = await r.json();
+    renderVersions(d.versions || []);
+  } catch {}
+}
+
+function renderVersions(versions) {
+  const el = document.getElementById('ver-list');
+  if (!el) return;
+  if (!versions.length) { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  el.innerHTML = '<div style="font-size:11px;color:#888;margin-bottom:6px">📂 저장된 버전 (최신 10개)</div>' +
+    versions.map((v, i) => {
+      const dt = v.saved_at ? v.saved_at.replace('T', ' ').slice(0, 16) : '';
+      const lbl = v.label ? ` · ${v.label}` : '';
+      return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+        <span style="font-size:12px;color:#555;flex:1">${dt}${lbl}</span>
+        <button onclick="restoreVersion(${i})"
+          style="font-size:11px;padding:2px 8px;background:#f0f0f0;border:1px solid #ccc;border-radius:4px;cursor:pointer">
+          복원
+        </button>
+      </div>`;
+    }).join('');
+  // 복원용 데이터 저장
+  el._versions = versions;
+}
+
+function restoreVersion(idx) {
+  const el = document.getElementById('ver-list');
+  const versions = el?._versions;
+  if (!versions || !versions[idx]) return;
+  const v = versions[idx];
+  if (!confirm(`"${v.saved_at?.slice(0,10) || '?'} ${v.label || ''}" 버전으로 복원하시겠습니까?\n현재 내용은 덮어씁니다.`)) return;
+  const rv = document.getElementById('rv');
+  if (rv) rv.value = v.content;
+}
+
 // ── Init ─────────────────────────────────────────────────────────
 window.addEventListener('load', async () => {
   try { const r = await fetch('/api/bookmarks'); const d = await r.json(); _bm = d.job_ids || []; } catch { _bm = []; }
   initBM(); updBC();
   await loadDrafts();
+  await loadVersions();
 
   try {
     const r = await fetch('/api/resume'); const d = await r.json();
