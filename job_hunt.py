@@ -241,27 +241,37 @@ def dedup(jobs):
 
 
 def search_wanted(keyword):
-    resp = get(
+    _headers = {"Referer": "https://www.wanted.co.kr", "Accept": "application/json", "x-wanted-language": "ko"}
+    _base = (
         f"https://www.wanted.co.kr/api/v4/jobs"
-        f"?country=kr&job_sort=job.latest_order&years=-1&locations=all&limit=30"
-        f"&query={quote(keyword)}",
-        headers={"Referer": "https://www.wanted.co.kr", "Accept": "application/json", "x-wanted-language": "ko"},
+        f"?country=kr&job_sort=job.latest_order&locations=all&limit=30&query={quote(keyword)}"
     )
-    items = resp.json().get("data", [])
+    # 신입 허용 공고 ID 수집 (years=0)
+    try:
+        newbie_ids = {
+            item["id"]
+            for item in get(_base + "&years=0", headers=_headers).json().get("data", [])
+        }
+    except Exception:
+        newbie_ids = set()
+    # 전체 공고 (years=-1 = 무관)
+    items = get(_base + "&years=-1", headers=_headers).json().get("data", [])
     jobs = []
     for item in items:
         due = item.get("due_time")
         deadline = due[:10].replace("-", ".") if due else ""
+        jid = item["id"]
+        career = "신입" if jid in newbie_ids else "경력"
         jobs.append({
             "site": "원티드",
             "size": "스타트업",
             "company": item.get("company", {}).get("name", ""),
             "title": item.get("position", ""),
-            "link": f"https://www.wanted.co.kr/wd/{item['id']}",
+            "link": f"https://www.wanted.co.kr/wd/{jid}",
             "deadline": deadline,
             "dday": _parse_dday(deadline),
             "location": item.get("address", {}).get("location", ""),
-            "career": "",
+            "career": career,
             "stacks": "",
         })
     return jobs
