@@ -39,11 +39,10 @@ def get_user_by_id(user_id):
     return data[0] if isinstance(data, list) and data else None
 
 
-def create_user(username, password, is_admin=False, is_approved=True):
+def create_user(username, password, is_admin=False):
     pw_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
     r = _req.post(_url("users"), headers=_h("return=representation"),
-                  json={"username": username, "pw_hash": pw_hash, "is_admin": is_admin,
-                        "is_approved": is_approved}, timeout=10)
+                  json={"username": username, "pw_hash": pw_hash, "is_admin": is_admin}, timeout=10)
     r.raise_for_status()
     uid = r.json()[0]["id"]
     _req.post(_url("resumes"), headers=_h(), json={"user_id": uid, "content": ""}, timeout=10)
@@ -61,17 +60,6 @@ def check_password(username, password):
     if bcrypt.checkpw(password.encode(), user["pw_hash"].encode()):
         return user
     return None
-
-
-def get_pending_users():
-    r = _req.get(_url("users"), headers=_h(),
-                 params={"is_approved": "eq.false", "select": "id,username,created_at", "order": "id"}, timeout=10)
-    return r.json() if isinstance(r.json(), list) else []
-
-
-def approve_user(user_id):
-    _req.patch(_url("users"), headers=_h(), params={"id": f"eq.{user_id}"},
-               json={"is_approved": True}, timeout=10)
 
 
 def list_users():

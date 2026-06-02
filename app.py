@@ -383,11 +383,10 @@ def logout():
 @login_required
 @admin_required
 def admin_page():
-    users         = db.list_users()
-    pending_users = db.get_pending_users()
+    users   = db.list_users()
     msg     = request.args.get("msg")
     msg_err = request.args.get("err")
-    return render_template("admin.html", users=users, pending_users=pending_users, msg=msg, msg_err=msg_err)
+    return render_template("admin.html", users=users, msg=msg, msg_err=msg_err)
 
 
 @app.route("/admin/users", methods=["POST"])
@@ -406,16 +405,6 @@ def admin_add_user():
         return redirect(url_for("admin_page", msg=f"{username} 추가 완료"))
     except Exception as e:
         return redirect(url_for("admin_page", msg=f"오류: {e}", err=1))
-
-
-@app.route("/admin/users/<int:uid>/approve", methods=["POST"])
-@login_required
-@admin_required
-def admin_approve_user(uid):
-    if not _csrf_validate():
-        return "잘못된 요청입니다.", 403
-    db.approve_user(uid)
-    return redirect(url_for("admin_page", msg="승인 완료"))
 
 
 @app.route("/admin/users/<int:uid>/delete", methods=["POST"])
