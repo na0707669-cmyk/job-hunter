@@ -12,9 +12,9 @@
   {% if ok %}<div class="ok">{{ ok }}</div>{% endif %}
   <form method="post">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <input type="text" name="username" placeholder="아이디 (영문/숫자)" required autofocus>
-    <input type="password" name="password" placeholder="비밀번호" required>
-    <input type="password" name="password2" placeholder="비밀번호 확인" required>
+    <input type="text" name="username" placeholder="아이디 (영문/숫자)" autocomplete="username" required autofocus>
+    <input type="password" name="password" placeholder="비밀번호" autocomplete="new-password" minlength="6" required>
+    <input type="password" name="password2" placeholder="비밀번호 확인" autocomplete="new-password" minlength="6" required>
     <button type="submit">가입하기</button>
   </form>
   <div class="sub">이미 계정이 있으신가요? <a href="/login">로그인</a></div>

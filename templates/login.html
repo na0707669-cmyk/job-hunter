@@ -11,8 +11,8 @@
   {% if error %}<div class="err">{{ error }}</div>{% endif %}
   <form method="post">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <input type="text" name="username" placeholder="아이디" required autofocus>
-    <input type="password" name="password" placeholder="비밀번호" required>
+    <input type="text" name="username" placeholder="아이디" autocomplete="username" required autofocus>
+    <input type="password" name="password" placeholder="비밀번호" autocomplete="current-password" required>
     <button type="submit">로그인</button>
   </form>
   <div class="sub">계정이 없으신가요? <a href="/register">회원가입</a></div>

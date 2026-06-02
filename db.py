@@ -58,8 +58,6 @@ def check_password(username, password):
     user = get_user(username)
     if not user:
         return None
-    if not user.get("is_approved", True):
-        return "pending"
     if bcrypt.checkpw(password.encode(), user["pw_hash"].encode()):
         return user
     return None

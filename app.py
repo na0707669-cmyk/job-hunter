@@ -316,9 +316,7 @@ def login_page():
             return "잘못된 요청입니다.", 403
         try:
             user = db.check_password(request.form["username"], request.form["password"])
-            if user == "pending":
-                error = "승인 대기 중입니다. 관리자에게 문의하세요."
-            elif user:
+            if user:
                 session["user_id"]  = user["id"]
                 session["username"] = user["username"]
                 session["is_admin"] = user["is_admin"]
@@ -364,8 +362,12 @@ def register():
             error = "비밀번호는 6자 이상이어야 합니다."
         else:
             try:
-                db.create_user(username, password, is_admin=False, is_approved=False)
-                ok = "가입 신청 완료! 관리자 승인 후 로그인할 수 있습니다."
+                db.create_user(username, password, is_admin=False)
+                user = db.check_password(username, password)
+                session["user_id"]  = user["id"]
+                session["username"] = user["username"]
+                session["is_admin"] = user["is_admin"]
+                return redirect(url_for("index"))
             except Exception as e:
                 error = "이미 사용 중인 아이디이거나 오류가 발생했습니다."
     return render_template("register.html", error=error, ok=ok)
