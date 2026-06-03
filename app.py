@@ -14,6 +14,7 @@ from job_hunt import (
     search_saramin, search_jobkorea, search_groupby, search_jasoseol,
     search_wanted,
     dedup, mark_new, save_seen,
+    _normalize_region, parse_min_years, REGION_ORDER,
 )
 
 app = Flask(__name__)
@@ -906,8 +907,17 @@ def index():
         deduped = dedup(all_raw)
         results = mark_new(deduped)
         duped   = len(all_raw) - len(deduped)
-        locs = sorted({(j.get("location") or "").strip().split()[0]
-                       for j in results if j.get("location")} - {""})
+
+        # 지역 정규화(시/도) + 요구 경력 연차 추출
+        for j in results:
+            j["region"] = _normalize_region(j.get("location", ""))
+            if (j.get("career") or "") == "신입":
+                j["min_years"] = 0
+            else:
+                j["min_years"] = parse_min_years(j.get("title", ""))
+
+        present = {j["region"] for j in results if j["region"]}
+        locs = [r for r in REGION_ORDER if r in present]
 
     return render_template(
         "index.html", q=q, size=size, size_label=label,

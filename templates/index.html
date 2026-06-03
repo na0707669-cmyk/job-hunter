@@ -104,19 +104,34 @@
     <option value="14">D-14 이내</option>
     <option value="30">D-30 이내</option>
   </select>
-  <label style="margin-left:8px">지역</label>
-  <select id="fl" onchange="filt()">
-    <option value="">전체</option>
-    {% for loc in locations %}<option value="{{ loc }}">{{ loc }}</option>{% endfor %}
-  </select>
-  <label style="margin-left:8px">경력</label>
-  <select id="fc" onchange="filt()">
-    <option value="">전체</option>
-    <option value="신입">신입</option>
-    <option value="경력">경력</option>
-    <option value="무관">무관</option>
-  </select>
-  <label style="margin-left:8px">정렬</label>
+
+  {% if locations %}
+  <span class="fgroup">
+    <label>지역</label>
+    <span class="cbset">
+      {% for loc in locations %}
+      <label class="cbchip"><input type="checkbox" class="fl-cb" value="{{ loc }}" onchange="filt()">{{ loc }}</label>
+      {% endfor %}
+    </span>
+  </span>
+  {% endif %}
+
+  <span class="fgroup">
+    <label>경력</label>
+    <span class="cbset">
+      <label class="cbchip"><input type="checkbox" class="fc-cb" value="신입" onchange="filt()">신입</label>
+      <label class="cbchip"><input type="checkbox" class="fc-cb" value="경력" onchange="filt()">경력</label>
+      <label class="cbchip"><input type="checkbox" class="fc-cb" value="무관" onchange="filt()">무관</label>
+    </span>
+  </span>
+
+  <span class="fgroup">
+    <label>경력 상한</label>
+    <input type="range" id="fy" min="0" max="11" value="11" oninput="filt()" title="요구 경력 N년 이내 공고만 표시">
+    <span id="fy-val" class="fy-val">제한 없음</span>
+  </span>
+
+  <label style="margin-left:4px">정렬</label>
   <select id="fs" onchange="filt()">
     <option value="">기본순</option>
     <option value="dday">마감 임박순</option>
@@ -156,6 +171,8 @@
   <tr class="jr"
       data-dday="{{ j.dday if j.dday is not none else 9999 }}"
       data-loc="{{ j.location }}"
+      data-region="{{ j.get('region','') }}"
+      data-years="{{ j.min_years if j.get('min_years') is not none else '' }}"
       data-id="{{ j.company }}|{{ j.title }}"
       data-isnew="{{ 'y' if j.is_new else 'n' }}"
       data-career="{{ j.get('career','') }}">

@@ -35,6 +35,87 @@ def _normalize_career(txt):
     return ""
 
 
+# ── 지역 정규화 ──────────────────────────────────────────────────
+# 표시·필터에서 시/도 단위로 묶기 위한 정규화. 알 수 없는 값(회사명·건물명 등)은 "" 반환.
+REGION_ORDER = [
+    "서울", "경기", "인천", "부산", "대구", "대전", "광주", "울산", "세종",
+    "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주", "해외",
+]
+
+_REGION_LONG = {
+    "서울특별시": "서울", "서울시": "서울",
+    "경기도": "경기",
+    "인천광역시": "인천",
+    "부산광역시": "부산",
+    "대구광역시": "대구",
+    "대전광역시": "대전",
+    "광주광역시": "광주",
+    "울산광역시": "울산",
+    "세종특별자치시": "세종", "세종시": "세종",
+    "강원특별자치도": "강원", "강원도": "강원",
+    "충청북도": "충북", "충청남도": "충남",
+    "전라북도": "전북", "전북특별자치도": "전북",
+    "전라남도": "전남",
+    "경상북도": "경북", "경상남도": "경남",
+    "제주특별자치도": "제주", "제주도": "제주",
+}
+
+
+def _normalize_region(loc):
+    """위치 문자열을 시/도 단위로 정규화. 인식 불가 시 '' 반환."""
+    if not loc:
+        return ""
+    s = str(loc).strip()
+    # 긴 정식 명칭 먼저 (충청북도 → 충북)
+    for k, v in _REGION_LONG.items():
+        if s.startswith(k):
+            return v
+    # 짧은 접두어 (서울강남구, 경기 성남시 등)
+    for v in REGION_ORDER:
+        if s.startswith(v):
+            return v
+    if "해외" in s or "외국" in s or "글로벌" in s:
+        return "해외"
+    return ""
+
+
+def _title_relevant(title, keyword):
+    """검색어 토큰 중 하나라도 제목에 있으면 관련 공고로 간주.
+    잡코리아가 검색 결과에 끼워넣는 무관한 광고 공고를 걸러낸다."""
+    if not keyword:
+        return True
+    t = (title or "").replace(" ", "")
+    tokens = [tok for tok in re.split(r"\s+", keyword.strip()) if len(tok) >= 2]
+    if not tokens:
+        return True
+    return any(tok.replace(" ", "") in t for tok in tokens)
+
+
+def parse_min_years(text):
+    """제목 등에서 요구 경력 최소 연차를 추출. 없으면 None.
+    예: '경력 1~5년'→1, '3년 이상'→3, '경력 2년'→2, '5년차'→5"""
+    if not text:
+        return None
+    # 1~5년 / 1∼5년 / 1-5년 → 최소값
+    m = re.search(r"(\d+)\s*[~∼\-]\s*\d+\s*년", text)
+    if m:
+        return int(m.group(1))
+    # 3년 ~ 10년 / 3년~10년 → 최소값
+    m = re.search(r"(\d+)\s*년\s*[~∼\-]\s*\d+", text)
+    if m:
+        return int(m.group(1))
+    m = re.search(r"(\d+)\s*년\s*이상", text)
+    if m:
+        return int(m.group(1))
+    m = re.search(r"경력\s*(\d+)\s*년", text)
+    if m:
+        return int(m.group(1))
+    m = re.search(r"(\d+)\s*년\s*차", text)
+    if m:
+        return int(m.group(1))
+    return None
+
+
 def _parse_dday(deadline_str):
     if not deadline_str:
         return None
@@ -109,6 +190,10 @@ def search_jobkorea(keyword):
         a_tags = [a for a in card.select('a[href*="/Recruit/GI_Read/"]') if a.get_text(strip=True)]
         if len(a_tags) < 2:
             continue
+        title = a_tags[0].get_text(strip=True)
+        # 잡코리아는 검색어와 무관한 광고 공고를 결과에 끼워넣음 → 제목 관련성으로 필터
+        if not _title_relevant(title, keyword):
+            continue
         parts = [t.strip() for t in card.get_text(separator="|").split("|") if t.strip()]
         deadline = ""
         for p in parts:
@@ -129,7 +214,7 @@ def search_jobkorea(keyword):
             "site": "잡코리아",
             "size": "중견·중소",
             "company": a_tags[1].get_text(strip=True),
-            "title": a_tags[0].get_text(strip=True),
+            "title": title,
             "link": a_tags[0].get("href", ""),
             "deadline": deadline,
             "dday": _parse_dday(deadline),

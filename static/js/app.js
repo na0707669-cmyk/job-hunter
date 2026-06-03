@@ -418,8 +418,13 @@ function switchTab(t) {
 // ── Filters ──────────────────────────────────────────────────────
 function filt() {
   const dd    = parseInt(document.getElementById('fd')?.value) || 0;
-  const loc   = document.getElementById('fl')?.value || '';
-  const car   = document.getElementById('fc')?.value || '';
+  const locs  = [...document.querySelectorAll('.fl-cb:checked')].map(c => c.value);
+  const cars  = [...document.querySelectorAll('.fc-cb:checked')].map(c => c.value);
+  const yEl   = document.getElementById('fy');
+  const yMax  = yEl ? parseInt(yEl.value) : 11;
+  const yLimit = (yEl && yMax <= 10) ? yMax : null;  // 11 = 제한 없음
+  const yLabel = document.getElementById('fy-val');
+  if (yLabel) yLabel.textContent = (yLimit === null) ? '제한 없음' : (yLimit + '년 이내');
   const sort  = document.getElementById('fs')?.value || '';
   const aiOnly = document.getElementById('fai')?.checked;
   const bmOnly = document.getElementById('fb')?.checked;
@@ -427,11 +432,19 @@ function filt() {
   const rows = Array.from(document.querySelectorAll('.jr'));
 
   rows.forEach(r => {
-    const rd = parseInt(r.dataset.dday), rl = r.dataset.loc || '', rc = r.dataset.career || '', rs = r.dataset.score;
+    const rd = parseInt(r.dataset.dday), rg = r.dataset.region || '', rc = r.dataset.career || '', rs = r.dataset.score;
     let show = true;
     if (dd && (isNaN(rd) || rd > dd || rd < 0)) show = false;
-    if (loc && !rl.includes(loc)) show = false;
-    if (car && rc !== car) show = false;
+    if (locs.length && !locs.includes(rg)) show = false;
+    if (cars.length && !cars.includes(rc)) show = false;
+    if (yLimit !== null) {
+      const ryRaw = r.dataset.years;
+      // 연차 미표기 공고는 항상 표시(판단 불가). 표기된 경우만 상한 적용.
+      if (ryRaw !== '' && ryRaw != null) {
+        const ry = parseInt(ryRaw);
+        if (!isNaN(ry) && ry > yLimit) show = false;
+      }
+    }
     if (aiOnly && !rs) show = false;
     if (bmOnly && !b.includes(r.dataset.id)) show = false;
     r.style.display = show ? '' : 'none';
@@ -450,7 +463,9 @@ function filt() {
   let n = 1; rows.forEach(r => { if (r.style.display !== 'none') r.cells[0].textContent = n++; });
 }
 function clrF() {
-  ['fd', 'fl', 'fc', 'fs'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  ['fd', 'fs'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  document.querySelectorAll('.fl-cb, .fc-cb').forEach(c => { c.checked = false; });
+  const fy = document.getElementById('fy'); if (fy) fy.value = fy.max;
   document.getElementById('fb').checked = false;
   const fai = document.getElementById('fai'); if (fai) fai.checked = false;
   filt();
