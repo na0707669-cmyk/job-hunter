@@ -137,6 +137,8 @@
     <option value="dday">마감 임박순</option>
     <option value="new">NEW 우선</option>
   </select>
+  <label style="margin-left:8px">마감 숨기기</label>
+  <input type="checkbox" id="fx" onchange="filt()" title="마감된 공고 숨기기 (상시채용은 유지)">
   <label style="margin-left:8px">AI매칭만</label>
   <input type="checkbox" id="fai" onchange="filt()">
   <label style="margin-left:8px">북마크만</label>
@@ -288,6 +290,14 @@
       <button id="iv-gen" onclick="genInterviewQuestions()">🎤 면접 질문</button>
       <div id="iv-out"></div>
     </div>
+  </div>
+</div>
+
+<!-- ── 검색 로딩 오버레이 ── -->
+<div id="loading-overlay">
+  <div class="lo-box">
+    <div class="lo-spin"></div>
+    <span>공고를 수집하는 중입니다...<br><small>여러 사이트를 동시에 검색합니다 (수 초 소요)</small></span>
   </div>
 </div>
 

@@ -251,6 +251,24 @@ def _set_cache(q, sites, data):
     CACHE[_cache_key(q, sites)] = (data, time.time())
 
 
+# ── NEW 배지: 서버 구동 중 본 공고 추적 ────────────────────────────
+# 크롤링 시점(캐시 미스)에 한 번만 is_new를 계산해 캐시에 함께 저장하므로
+# 같은 검색 새로고침(캐시 히트) 시 NEW 상태가 유지된다. 서버 재시작 시 초기화.
+_SEEN_IDS = set()
+
+def _job_key(j):
+    return f"{j.get('company','')}|{j.get('title','')}"
+
+def _mark_and_remember(jobs):
+    for j in jobs:
+        j["is_new"] = _job_key(j) not in _SEEN_IDS
+    if len(_SEEN_IDS) > 50000:      # 무한 증가 방지
+        _SEEN_IDS.clear()
+    for j in jobs:
+        _SEEN_IDS.add(_job_key(j))
+    return jobs
+
+
 _HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
 def _fetch_company_info(url, site):
@@ -894,6 +912,7 @@ def index():
             if cached:
                 return cached  # (raw, counts)
             raw, cnts = _run(kw, active_sites)
+            _mark_and_remember(raw)   # 크롤링 시점에 NEW 판정(이후 캐시로 고정)
             _set_cache(kw, active_sites, (raw, cnts))
             return raw, cnts
 
@@ -905,7 +924,7 @@ def index():
                     counts[site] = counts.get(site, 0) + cnt
 
         deduped = dedup(all_raw)
-        results = mark_new(deduped)
+        results = deduped          # is_new는 크롤링 시점(fetch_kw)에 이미 부여됨
         duped   = len(all_raw) - len(deduped)
 
         # 지역 정규화(시/도) + 요구 경력 연차 추출

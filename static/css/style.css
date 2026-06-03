@@ -120,6 +120,18 @@ body { font-family: -apple-system, 'Noto Sans KR', sans-serif; background: var(-
 .fy-val { font-size: 12px; color: var(--text-sub); min-width: 56px; }
 #fy { cursor: pointer; vertical-align: middle; }
 
+/* ── 검색 로딩 오버레이 ── */
+#loading-overlay { display: none; position: fixed; inset: 0; z-index: 1000;
+  background: rgba(0,0,0,.45); align-items: center; justify-content: center; }
+#loading-overlay.on { display: flex; }
+.lo-box { background: var(--surface); border-radius: 12px; padding: 28px 36px;
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.3); color: var(--text); font-size: 14px; text-align: center; }
+.lo-box small { color: var(--text-muted); font-size: 11px; }
+.lo-spin { width: 36px; height: 36px; border: 3px solid var(--border-2);
+  border-top-color: #7c3aed; border-radius: 50%; animation: lo-rot .8s linear infinite; }
+@keyframes lo-rot { to { transform: rotate(360deg); } }
+
 /* ── Tabs ── */
 .tabs { display: flex; padding: 8px 24px 0; }
 .tab { padding: 8px 16px; font-size: 13px; cursor: pointer; border-bottom: 2px solid transparent; color: var(--text-muted); }

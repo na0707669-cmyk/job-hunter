@@ -57,11 +57,22 @@ document.addEventListener('click', e => {
 });
 
 // ── Navigation ───────────────────────────────────────────────────
+function showLoading() {
+  const el = document.getElementById('loading-overlay');
+  if (el) el.classList.add('on');
+}
+// 뒤로가기로 복귀 시 오버레이가 남아있지 않도록
+window.addEventListener('pageshow', () => {
+  const el = document.getElementById('loading-overlay');
+  if (el) el.classList.remove('on');
+});
+
 function go() {
   const q = document.getElementById('qi').value.trim();
   if (!q) return;
   addH(q);
   const sites = [...document.querySelectorAll('.site-cb:checked')].map(c => c.value).join(',');
+  showLoading();
   window.location.href = `/?q=${encodeURIComponent(q)}&size=${document.getElementById('sz').value}&sites=${encodeURIComponent(sites)}`;
 }
 document.getElementById('qi').addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
@@ -71,6 +82,7 @@ function addAlso(term) {
   const a = (u.searchParams.get('also') || '').split(',').filter(t => t);
   if (!a.includes(term)) a.push(term);
   u.searchParams.set('also', a.join(','));
+  showLoading();
   window.location.href = u.toString();
 }
 function removeAlso(term) {
@@ -78,6 +90,7 @@ function removeAlso(term) {
   const a = (u.searchParams.get('also') || '').split(',').filter(t => t && t !== term);
   if (a.length > 0) u.searchParams.set('also', a.join(','));
   else u.searchParams.delete('also');
+  showLoading();
   window.location.href = u.toString();
 }
 
@@ -428,6 +441,7 @@ function filt() {
   const sort  = document.getElementById('fs')?.value || '';
   const aiOnly = document.getElementById('fai')?.checked;
   const bmOnly = document.getElementById('fb')?.checked;
+  const hideExpired = document.getElementById('fx')?.checked;
   const b = gb();
   const rows = Array.from(document.querySelectorAll('.jr'));
 
@@ -435,6 +449,7 @@ function filt() {
     const rd = parseInt(r.dataset.dday), rg = r.dataset.region || '', rc = r.dataset.career || '', rs = r.dataset.score;
     let show = true;
     if (dd && (isNaN(rd) || rd > dd || rd < 0)) show = false;
+    if (hideExpired && !isNaN(rd) && rd < 0) show = false;  // 마감(dday<0)만 숨김, 상시(9999) 유지
     if (locs.length && !locs.includes(rg)) show = false;
     if (cars.length && !cars.includes(rc)) show = false;
     if (yLimit !== null) {
@@ -468,6 +483,7 @@ function clrF() {
   const fy = document.getElementById('fy'); if (fy) fy.value = fy.max;
   document.getElementById('fb').checked = false;
   const fai = document.getElementById('fai'); if (fai) fai.checked = false;
+  const fx = document.getElementById('fx'); if (fx) fx.checked = false;
   filt();
 }
 
